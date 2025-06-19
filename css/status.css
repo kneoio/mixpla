@@ -1,0 +1,18 @@
+/* css/status.css */
+
+.backend-status-text {
+    margin-top: 20px;
+    margin-bottom: 15px;
+    color: #abb2bf;
+    font-size: 1em;
+}
+
+.backend-status-text.error {
+    color: #e06c75;
+}
+
+
+body {
+    padding-top: 10px;
+
+}
