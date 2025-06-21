@@ -14,18 +14,20 @@ const lightenColor = (hex, percent) => {
 
 export const useStationStore = defineStore('station', {
   state: () => ({
-    stations: ['sexta', 'aizoo', 'bratan', 'the-radiola', 'labirints'], // Static list of stations
-    radioName: storageService.getLastStation() || 'sexta', // Load last station or default
+    stations: [], // Will be fetched from API
+    radioName: storageService.getLastStation() || null, // Load last station or default, will be set after fetch
     stationInfo: null,
     nowPlaying: 'N/A',
-    pollingInterval: null,
+    statusPollingInterval: null,
+    listPollingInterval: null,
     bufferStatus: 'healthy', // 'healthy', 'buffering', 'stalled', 'fatal'
     animationIntensity: 0, // 0 to 1 for animation intensity
     stationColor: null,
-    statusText: '',
+    statusText: 'Loading stations...',
     stationName: 'Radio',
     isAsleep: false, // new state to indicate if station is asleep
     isWaitingForCurator: false, // new state for when station is online but idle
+    isWarmingUp: false,
   }),
 
   getters: {
@@ -47,10 +49,47 @@ export const useStationStore = defineStore('station', {
   },
 
   actions: {
+    async updateStationsList() {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/radio/stations`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch stations list');
+        }
+        this.stations = await response.json();
+      } catch (error) {
+        console.error('Error updating stations list:', error);
+      }
+    },
+
+    async fetchStations() {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/radio/stations`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch stations list');
+        }
+        this.stations = await response.json();
+        const stationExists = this.stations.some(s => s.name === this.radioName);
+
+        if (!this.radioName || !stationExists) {
+          if (this.stations.length > 0) {
+            this.radioName = this.stations[0].name;
+            storageService.saveLastStation(this.radioName);
+          }
+        }
+        // Always start polling after fetching stations, it will use the correct radioName
+        this.startPolling(); // Start polling for the selected station
+        this.startListPolling(); // Start polling for the whole list
+
+      } catch (error) {
+        console.error('Error fetching stations:', error);
+        this.statusText = 'Could not load station list.';
+      }
+    },
+
     async fetchStationInfo() {
       if (!this.radioName) return;
 
-      const endpoint = `/bratan-api/${this.radioName}/radio/status`;
+      const endpoint = `${import.meta.env.VITE_API_BASE_URL}/${this.radioName}/radio/status`;
       try {
         const response = await fetch(endpoint);
 
@@ -60,6 +99,7 @@ export const useStationStore = defineStore('station', {
                 console.log(`[Debug] 404 response text: ${responseText}`);
                 if (responseText.includes("Radio station not broadcasting")) {
                     console.log('[Debug] Station identified as asleep.');
+                    this.isWarmingUp = false;
                     this.isAsleep = true;
                     this.statusText = 'Station is asleep. Press play to wake it up.';
                     this.stationName = this.radioName;
@@ -72,7 +112,8 @@ export const useStationStore = defineStore('station', {
             throw new Error(`Server responded with ${response.status}`);
         }
         const data = await response.json();
-        
+
+        this.isWarmingUp = false; // No longer warming up once we get a valid status
         this.isAsleep = false; // Station is awake
         this.stationInfo = data;
         this.stationName = data.name || 'Unknown Radio';
@@ -103,6 +144,7 @@ export const useStationStore = defineStore('station', {
 
       } catch (error) {
         console.error(`Failed to fetch station status for ${this.radioName}:`, error);
+        this.isWarmingUp = false;
         this.isAsleep = false;
         this.isWaitingForCurator = false;
         this.statusText = `Error: Could not fetch station status.`;
@@ -114,8 +156,9 @@ export const useStationStore = defineStore('station', {
 
     async wakeUpStation() {
         if (!this.radioName) return;
+        this.isWarmingUp = true;
         this.statusText = 'Station is warming up, please wait...';
-        const endpoint = `/bratan-api/${this.radioName}/radio/wakeup`;
+        const endpoint = `${import.meta.env.VITE_API_BASE_URL}/${this.radioName}/radio/wakeup`;
         try {
             const response = await fetch(endpoint, { method: 'PUT' });
             if (!response.ok) {
@@ -130,7 +173,7 @@ export const useStationStore = defineStore('station', {
     },
 
     setStation(newStationName) {
-      if (this.stations.includes(newStationName) && this.radioName !== newStationName) {
+      if (this.stations.some(s => s.name === newStationName) && this.radioName !== newStationName) {
         this.radioName = newStationName;
         storageService.saveLastStation(newStationName); // Save to local storage
         this.isAsleep = false; // Reset asleep status on station change
@@ -143,17 +186,31 @@ export const useStationStore = defineStore('station', {
     startPolling(fast = false) {
       this.stopPolling(); // Ensure no multiple intervals are running
       this.fetchStationInfo(); // Fetch immediately on start
-      const interval = fast ? 5000 : 15000; // Poll more frequently if waking up
+      const interval = fast ? 5000 : 30000; // Poll more frequently if waking up, otherwise every 30s
       // Poll for updates
-      this.pollingInterval = setInterval(() => {
+      this.statusPollingInterval = setInterval(() => {
         this.fetchStationInfo();
       }, interval);
     },
 
     stopPolling() {
-      if (this.pollingInterval) {
-        clearInterval(this.pollingInterval);
-        this.pollingInterval = null;
+      if (this.statusPollingInterval) {
+        clearInterval(this.statusPollingInterval);
+        this.statusPollingInterval = null;
+      }
+    },
+
+    startListPolling() {
+      this.stopListPolling(); // prevent duplicates
+      this.listPollingInterval = setInterval(() => {
+        this.updateStationsList();
+      }, 60000); // every 60 seconds
+    },
+
+    stopListPolling() {
+      if (this.listPollingInterval) {
+        clearInterval(this.listPollingInterval);
+        this.listPollingInterval = null;
       }
     },
   },

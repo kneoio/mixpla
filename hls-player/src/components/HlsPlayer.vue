@@ -5,12 +5,12 @@
 
     <div class="player-content">
       <!-- Station Info -->
-      <div class="station-info">
+      <div class="station-info" :style="darkThemeTextStyle">
         <h1 class="station-name">{{ stationName }}</h1>
       </div>
 
       <!-- Now Playing Info -->
-      <div class="now-playing-info">
+      <div class="now-playing-info" :style="darkThemeTextStyle">
         <div class="now-playing-ticker"><span>{{ nowPlaying }}</span></div>
       </div>
 
@@ -35,20 +35,12 @@
       </div>
     </div>
 
-    <!-- Log console, appears when showLogs is true -->
-    <div v-if="showLogs" class="log-console-wrapper">
-        <pre ref="logConsoleElement" class="log-console">{{ allLogs }}</pre>
-    </div>
 
-    <!-- Log Toggle -->
-    <div class="log-toggle" @click="showLogs = !showLogs">
-      {{ showLogs ? 'Hide Logs' : 'Logs' }}
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
 import { storeToRefs } from 'pinia';
@@ -59,7 +51,7 @@ import Hls from 'hls.js';
 
 // --- Refs and State ---
 const audioPlayer = ref(null);
-const logConsoleElement = ref(null); // Ref for the <pre> element
+
 
 let hls = null;
 const isPlaying = ref(false);
@@ -85,9 +77,7 @@ const bufferStatusText = computed(() => {
       return '...';
   }
 });
-const showLogs = ref(false);
-const logs = ref([]);
-const LOG_CONSOLE_HEIGHT = '200px'; // Define height for JS logic
+
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator } = storeToRefs(stationStore); // Use storeToRefs for reactivity
@@ -102,45 +92,54 @@ let animationFrameId = null;
 // --- Computed Properties ---
 const isWakingUp = computed(() => statusText.value === 'Station is warming up, please wait...');
 const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
-const allLogs = computed(() => logs.value.join('\n'));
+
+
+const darkThemeTextStyle = computed(() => {
+  if (uiStore.theme === 'dark') {
+    return {
+      color: '#E0E0E0',
+      textShadow: '1px 1px 2px rgba(0, 0, 0, 0.5)'
+    };
+  }
+  return {};
+});
 
 // --- Watchers ---
-watch(isAsleep, (newValue, oldValue) => {
-  // When station goes to sleep, ensure player is paused and icon is correct.
-  if (newValue === true) {
-    if (audioPlayer.value && !audioPlayer.value.paused) {
-      audioPlayer.value.pause();
+watch(
+  () => ({
+    name: radioName.value,
+    asleep: isAsleep.value,
+    waiting: isWaitingForCurator.value,
+  }),
+  (newStatus, oldStatus) => {
+    // Destroy the player if the station is no longer playable
+    if (newStatus.asleep || newStatus.waiting) {
+      if (hls) {
+        console.log(`[Player] Station ${newStatus.name} is not playable. Destroying HLS instance.`);
+        hls.destroy();
+        hls = null;
+        isPlaying.value = false;
+      }
+      return;
     }
-    isPlaying.value = false;
-  }
 
-  // If station was asleep and is now awake, re-initialize HLS to start playback.
-  if (oldValue === true && newValue === false) {
-    // A short delay is needed for the server to warm up and the stream to be available.
-    setTimeout(() => {
-      console.log('[Debug] Station is awake. Re-initializing HLS player.');
-      initializeHls(radioName.value);
-    }, 2500); // Increased delay to give server ample time to start stream
-  }
-});
+    // Initialize the player if the station is now playable
+    if (newStatus.name && !newStatus.asleep && !newStatus.waiting) {
+      const nameChanged = oldStatus ? newStatus.name !== oldStatus.name : true;
+      const justWokeUp = oldStatus ? oldStatus.asleep && !newStatus.asleep : false;
+      const justBecameReady = oldStatus ? oldStatus.waiting && !newStatus.waiting : false;
 
-watch(logs, async () => {
-  if (showLogs.value && logConsoleElement.value) {
-    await nextTick(); // Wait for DOM to update
-    logConsoleElement.value.scrollTop = logConsoleElement.value.scrollHeight;
-  }
-}, { deep: true });
-
-watch(showLogs, (newValue) => {
-  const appContainer = document.getElementById('app-container'); // Assuming App.vue has id='app-container'
-  if (appContainer) {
-    if (newValue) {
-      appContainer.style.paddingBottom = LOG_CONSOLE_HEIGHT;
-    } else {
-      appContainer.style.paddingBottom = '0px';
+      if (nameChanged || justWokeUp || justBecameReady) {
+        console.log(`[Player] Station ${newStatus.name} is now playable. Initializing HLS.`);
+        const delay = justWokeUp ? 2500 : 0;
+        setTimeout(() => {
+          initializeHls(newStatus.name);
+        }, delay);
+      }
     }
-  }
-});
+  },
+  { deep: true, immediate: true }
+);
 
 // --- Player Logic ---
 const togglePlay = () => {
@@ -166,66 +165,58 @@ const togglePlay = () => {
   }
 };
 
-const addLog = (eventName, data) => {
-  const logMessage = `[${new Date().toLocaleTimeString()}] ${eventName}: ${JSON.stringify(data, null, 2)}`;
-  logs.value.unshift(logMessage);
-  if (logs.value.length > 100) logs.value.pop();
-};
-
 const initializeHls = (radioName) => {
   if (hls) {
     hls.destroy();
   }
-  if (!Hls.isSupported() || !audioPlayer.value) {
-    console.error('HLS is not supported or audio player is not available.');
+  if (!Hls.isSupported()) {
+    console.error("HLS is not supported in this browser.");
     return;
   }
 
-  hls = new Hls();
-  
-  // Reset status on initialization
-  bufferStatus.value = 'ok';
-  successfulFragmentsAfterStall.value = 0;
-
-  // Attach all event listeners
-  Object.values(Hls.Events).forEach(eventName => {
-    hls.on(eventName, (event, data) => addLog(eventName, data));
+  const streamUrl = `${import.meta.env.VITE_API_BASE_URL}/${radioName}/radio/stream.m3u8`;
+  hls = new Hls({
+    debug: false,
+    maxBufferLength: 30,
+    maxMaxBufferLength: 600,
+    fragLoadingTimeOut: 20000,
+    manifestLoadingTimeOut: 10000,
+    levelLoadingTimeOut: 10000,
   });
 
+  hls.loadSource(streamUrl);
+  hls.attachMedia(audioPlayer.value);
+
+  hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+    setupAudioVisualizer();
+  });
+
+  hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+    console.log('Manifest loaded, found ' + data.levels.length + ' quality level');
+    bufferStatus.value = 'ok';
+    // Attempt to play, but handle autoplay restrictions gracefully.
+    audioPlayer.value.play().then(() => {
+      isPlaying.value = true;
+    }).catch(error => {
+      console.warn('Autoplay was prevented by the browser.');
+      isPlaying.value = false; // Ensure UI shows the play button
+    });
+  });
+  
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
     const fragTitle = data.frag.title;
     if (fragTitle) {
-        stationStore.nowPlaying = fragTitle;
+      stationStore.nowPlaying = fragTitle;
     }
   });
 
-  hls.on(Hls.Events.BUFFER_STALLED, () => {
-    if (bufferStatus.value !== 'fatal') {
-      bufferStatus.value = 'stalling';
-      successfulFragmentsAfterStall.value = 0;
-    }
-  });
-
-  hls.on(Hls.Events.FRAG_BUFFERED, () => {
-    if (bufferStatus.value === 'fatal') return;
+  hls.on(Hls.Events.FRAG_BUFFERED, (event, data) => {
     if (bufferStatus.value === 'stalling') {
       successfulFragmentsAfterStall.value++;
       if (successfulFragmentsAfterStall.value >= 2) {
         bufferStatus.value = 'ok';
+        successfulFragmentsAfterStall.value = 0;
       }
-    } else {
-      bufferStatus.value = 'ok';
-    }
-  });
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    // Do not autoplay if the station is waiting for a curator.
-    if (audioPlayer.value && !isWaitingForCurator.value) {
-      audioPlayer.value.play().catch(error => {
-        console.error('Autoplay on station switch failed:', error);
-        // Sync UI state in case autoplay is blocked by the browser
-        isPlaying.value = !audioPlayer.value.paused;
-      });
     }
   });
 
@@ -233,30 +224,31 @@ const initializeHls = (radioName) => {
     if (data.fatal) {
       console.error('HLS.js fatal error:', data);
       bufferStatus.value = 'fatal';
-      successfulFragmentsAfterStall.value = 0;
-      
-      // Destroy and attempt to recover
-      hls.destroy();
-      setTimeout(() => {
-        initializeHls(stationStore.radioName);
-      }, 5000);
+      // Attempt to recover
+      switch (data.type) {
+        case Hls.ErrorTypes.NETWORK_ERROR:
+          console.error("Fatal network error, trying to recover...");
+          hls.startLoad();
+          break;
+        case Hls.ErrorTypes.MEDIA_ERROR:
+          console.error("Fatal media error, trying to recover...");
+          hls.recoverMediaError();
+          break;
+        default:
+          console.error("Unrecoverable error, destroying HLS instance.");
+          hls.destroy();
+          break;
+      }
     }
   });
 
-    const streamUrl = `/bratan-api/${radioName}/radio/stream.m3u8`;
-  hls.loadSource(streamUrl);
-  hls.attachMedia(audioPlayer.value);
+  hls.on(Hls.Events.BUFFER_STALLED, (event, data) => {
+    bufferStatus.value = 'stalling';
+    successfulFragmentsAfterStall.value = 0;
+  });
 };
 
-watch(radioName, (newRadioName) => {
-  if (newRadioName) {
-    // If there's an existing HLS instance, destroy it before creating a new one.
-    if (hls) {
-      hls.destroy();
-    }
-    initializeHls(newRadioName);
-  }
-}, { immediate: true }); // immediate: true runs the watcher on component mount
+
 
 function setupAudioVisualizer() {
   if (!audioPlayer.value) return;
@@ -298,14 +290,6 @@ onMounted(() => {
   audio.addEventListener('play', () => { isPlaying.value = true; });
   audio.addEventListener('pause', () => { isPlaying.value = false; });
   audio.addEventListener('ended', () => { isPlaying.value = false; });
-
-  
-
-  // Initial padding adjustment if logs are shown by default
-  const appContainer = document.getElementById('app-container');
-  if (appContainer && showLogs.value) {
-    appContainer.style.paddingBottom = LOG_CONSOLE_HEIGHT;
-  }
 });
 
 onBeforeUnmount(() => {
@@ -317,11 +301,6 @@ onBeforeUnmount(() => {
   }
   if (audioCtx) {
     audioCtx.close();
-  }
-  // Reset padding when component is unmounted
-  const appContainer = document.getElementById('app-container');
-  if (appContainer) {
-    appContainer.style.paddingBottom = '0px';
   }
 });
 </script>
@@ -420,52 +399,5 @@ onBeforeUnmount(() => {
     box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
   }
 }
-.logging-.controls {
-    margin-bottom: 1rem;
-}
 
-.log-toggle {
-    position: fixed;
-    bottom: 10px;
-    right: 15px; /* Changed back to right */
-    font-size: 0.7rem;
-    font-family: 'Consolas', 'Courier New', monospace;
-    color: #aaa;
-    cursor: pointer;
-    z-index: 1001; /* To be above the log console if it overlaps */
-    padding: 2px 5px;
-    background-color: rgba(40, 44, 52, 0.75); /* Semi-transparent background */
-    border-radius: 3px;
-    transition: color 0.2s ease;
-}
-
-.log-toggle:hover {
-    color: #fff;
-}
-
-.log-console-wrapper {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 200px; /* Corresponds to LOG_CONSOLE_HEIGHT in JS */
-    z-index: 1000;
-    background-color: #282c34;
-    border-top: 1px solid #444;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.log-console {
-    height: 100%;
-    overflow-y: scroll;
-    padding: 10px;
-    color: #abb2bf;
-    font-family: 'Consolas', 'Courier New', Courier, monospace;
-    font-size: 0.75rem;
-    text-align: left;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    background-color: transparent;
-}
 </style>

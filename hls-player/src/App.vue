@@ -1,21 +1,22 @@
 <template>
   <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
     <n-global-style />
-    <div id="app-container" :style="dynamicBorderStyle">
+    <div id="app-container" :style="dynamicBorderStyle" :class="{ 'warming-up': stationStore.isWarmingUp }">
       <div class="station-selector-wrapper">
         <n-button-group>
           <n-button
             v-for="station in mainStations"
-            :key="station"
-            :type="stationStore.radioName === station ? 'primary' : 'default'"
-            @click="stationStore.setStation(station)"
+            :key="station.name"
+            :type="stationStore.radioName === station.name ? 'primary' : 'default'"
+            @click="stationStore.setStation(station.name)"
+            :style="getStationStyle(station)"
           >
-            {{ station.charAt(0).toUpperCase() + station.slice(1) }}
+            {{ station.name.charAt(0).toUpperCase() + station.name.slice(1) }}
           </n-button>
-          <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="stationStore.setStation">
-            <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
-          </n-dropdown>
         </n-button-group>
+        <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="stationStore.setStation">
+          <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
+        </n-dropdown>
       </div>
       <div class="theme-switch-wrapper">
         <n-switch :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" />
@@ -27,8 +28,8 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, computed, watch } from 'vue';
-import { NConfigProvider, NGlobalStyle, darkTheme, NButtonGroup, NButton, NDropdown } from 'naive-ui';
+import { onMounted, onBeforeUnmount, computed, watch, ref, h } from 'vue';
+import { NConfigProvider, NGlobalStyle, darkTheme, NButton, NDropdown, NButtonGroup } from 'naive-ui';
 import HlsPlayer from './components/HlsPlayer.vue';
 import { useUiStore } from './stores/ui';
 import { NSwitch } from 'naive-ui';
@@ -40,15 +41,27 @@ const stationStore = useStationStore();
 const mainStations = computed(() => stationStore.stations.slice(0, 3));
 const dropdownStations = computed(() => stationStore.stations.slice(3));
 
+const getStationStyle = (station) => {
+  const activeStatuses = ['ONLINE', 'BROADCASTING', 'WAITING_FOR_CURATOR'];
+  if (activeStatuses.includes(station.currentStatus)) {
+    return { color: station.color };
+  }
+  return { color: '#808080' }; // Grey for offline
+};
+
+const renderDropdownLabel = (station) => {
+  return h('span', { style: getStationStyle(station) }, station.name.charAt(0).toUpperCase() + station.name.slice(1));
+};
+
 const dropdownOptions = computed(() => 
   dropdownStations.value.map(station => ({
-    label: station.charAt(0).toUpperCase() + station.slice(1),
-    key: station
+    key: station.name,
+    label: () => renderDropdownLabel(station)
   }))
 );
 
 const isDropdownStationActive = computed(() => 
-  dropdownStations.value.includes(stationStore.radioName)
+  dropdownStations.value.some(s => s.name === stationStore.radioName)
 );
 
 const themeOverrides = {
@@ -74,12 +87,16 @@ const dynamicBorderStyle = computed(() => {
 const naiveTheme = computed(() => (uiStore.theme === 'dark' ? darkTheme : null));
 
 onMounted(() => {
-  stationStore.startPolling();
+  stationStore.fetchStations();
 });
 
 onBeforeUnmount(() => {
   stationStore.stopPolling();
+  stationStore.stopListPolling();
 });
+
+// Watch for theme changes and apply background color to the body
+
 
 // Watch for theme changes and apply background color to the body
 watch(() => uiStore.theme, (newTheme) => {
@@ -145,6 +162,21 @@ body {
   border: 2px solid var(--dynamic-border-color);
   transition: box-shadow 0.1s ease-out;
 }
+
+@keyframes fire-flicker {
+  0%   { box-shadow: 0 0 10px 4px rgba(var(--dynamic-border-rgb), 0.5), inset 0 0 5px 2px rgba(var(--dynamic-border-rgb), 0.3); }
+  20%  { box-shadow: 0 0 25px 10px rgba(var(--dynamic-border-rgb), 0.8), inset 0 0 10px 4px rgba(var(--dynamic-border-rgb), 0.5); }
+  40%  { box-shadow: 0 0 15px 6px rgba(var(--dynamic-border-rgb), 0.6), inset 0 0 7px 3px rgba(var(--dynamic-border-rgb), 0.4); }
+  60%  { box-shadow: 0 0 30px 12px rgba(var(--dynamic-border-rgb), 0.9), inset 0 0 12px 6px rgba(var(--dynamic-border-rgb), 0.6); }
+  80%  { box-shadow: 0 0 12px 5px rgba(var(--dynamic-border-rgb), 0.7), inset 0 0 6px 2px rgba(var(--dynamic-border-rgb), 0.5); }
+  100% { box-shadow: 0 0 10px 4px rgba(var(--dynamic-border-rgb), 0.5), inset 0 0 5px 2px rgba(var(--dynamic-border-rgb), 0.3); }
+}
+
+#app-container.warming-up {
+  animation: fire-flicker 0.8s infinite linear;
+}
+
+
 
 .station-selector-wrapper {
   margin-bottom: 1.5rem;
