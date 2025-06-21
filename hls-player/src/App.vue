@@ -25,6 +25,9 @@
       <HlsPlayer />
     </div>
   </n-config-provider>
+  <footer>
+    <p class="version-text">v.1.4</p>
+  </footer>
 </template>
 
 <script setup>
