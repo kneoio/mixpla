@@ -44,7 +44,14 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5176
+    port: 5176,
+    proxy: {
+      '/bratan-api': {
+        target: 'https://bratan.online',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/bratan-api/, ''),
+      },
+    },
   },
   resolve: {
     alias: {

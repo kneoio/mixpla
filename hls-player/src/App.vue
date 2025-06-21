@@ -3,14 +3,19 @@
     <n-global-style />
     <div id="app-container" :style="dynamicBorderStyle">
       <div class="station-selector-wrapper">
-        <n-radio-group :value="stationStore.radioName" name="station-selector" @update:value="stationStore.setStation">
-          <n-radio-button
-            v-for="station in stationStore.stations"
+        <n-button-group>
+          <n-button
+            v-for="station in mainStations"
             :key="station"
-            :value="station"
-            :label="station.charAt(0).toUpperCase() + station.slice(1)"
-          />
-        </n-radio-group>
+            :type="stationStore.radioName === station ? 'primary' : 'default'"
+            @click="stationStore.setStation(station)"
+          >
+            {{ station.charAt(0).toUpperCase() + station.slice(1) }}
+          </n-button>
+          <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="stationStore.setStation">
+            <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
+          </n-dropdown>
+        </n-button-group>
       </div>
       <div class="theme-switch-wrapper">
         <n-switch :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" />
@@ -23,7 +28,7 @@
 
 <script setup>
 import { onMounted, onBeforeUnmount, computed, watch } from 'vue';
-import { NConfigProvider, NGlobalStyle, darkTheme, NRadioGroup, NRadioButton } from 'naive-ui';
+import { NConfigProvider, NGlobalStyle, darkTheme, NButtonGroup, NButton, NDropdown } from 'naive-ui';
 import HlsPlayer from './components/HlsPlayer.vue';
 import { useUiStore } from './stores/ui';
 import { NSwitch } from 'naive-ui';
@@ -31,6 +36,20 @@ import { useStationStore } from './stores/station';
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
+
+const mainStations = computed(() => stationStore.stations.slice(0, 3));
+const dropdownStations = computed(() => stationStore.stations.slice(3));
+
+const dropdownOptions = computed(() => 
+  dropdownStations.value.map(station => ({
+    label: station.charAt(0).toUpperCase() + station.slice(1),
+    key: station
+  }))
+);
+
+const isDropdownStationActive = computed(() => 
+  dropdownStations.value.includes(stationStore.radioName)
+);
 
 const themeOverrides = {
   common: {

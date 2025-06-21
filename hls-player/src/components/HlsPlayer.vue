@@ -16,7 +16,7 @@
 
       <!-- Controls -->
       <div class="controls">
-        <n-button @click="togglePlay" type="primary" circle strong size="large">
+        <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWakingUp || isWaitingForCurator">
           <template #icon>
             <n-icon :component="playIcon" />
           </template>
@@ -25,7 +25,7 @@
 
       <!-- Buffer Status -->
       <div class="status-indicator-wrapper">
-        <div :class="['buffer-indicator', bufferStatus]"></div>
+        <div :class="['buffer-indicator', indicatorClass]"></div>
         <span>{{ bufferStatusText }}</span>
       </div>
 
@@ -66,6 +66,13 @@ const isPlaying = ref(false);
 
 const bufferStatus = ref('ok'); // ok, stalling, fatal
 
+const indicatorClass = computed(() => {
+  if (isWaitingForCurator.value) {
+    return 'waiting';
+  }
+  return bufferStatus.value;
+});
+
 const bufferStatusText = computed(() => {
   switch (bufferStatus.value) {
     case 'ok':
@@ -83,7 +90,7 @@ const logs = ref([]);
 const LOG_CONSOLE_HEIGHT = '200px'; // Define height for JS logic
 const uiStore = useUiStore();
 const stationStore = useStationStore();
-const { radioName, stationName, statusText, nowPlaying } = storeToRefs(stationStore); // Use storeToRefs for reactivity
+const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator } = storeToRefs(stationStore); // Use storeToRefs for reactivity
 const successfulFragmentsAfterStall = ref(0);
 
 // Audio visualizer state
@@ -93,10 +100,30 @@ let source = null;
 let animationFrameId = null;
 
 // --- Computed Properties ---
+const isWakingUp = computed(() => statusText.value === 'Station is warming up, please wait...');
 const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
 const allLogs = computed(() => logs.value.join('\n'));
 
 // --- Watchers ---
+watch(isAsleep, (newValue, oldValue) => {
+  // When station goes to sleep, ensure player is paused and icon is correct.
+  if (newValue === true) {
+    if (audioPlayer.value && !audioPlayer.value.paused) {
+      audioPlayer.value.pause();
+    }
+    isPlaying.value = false;
+  }
+
+  // If station was asleep and is now awake, re-initialize HLS to start playback.
+  if (oldValue === true && newValue === false) {
+    // A short delay is needed for the server to warm up and the stream to be available.
+    setTimeout(() => {
+      console.log('[Debug] Station is awake. Re-initializing HLS player.');
+      initializeHls(radioName.value);
+    }, 2500); // Increased delay to give server ample time to start stream
+  }
+});
+
 watch(logs, async () => {
   if (showLogs.value && logConsoleElement.value) {
     await nextTick(); // Wait for DOM to update
@@ -117,10 +144,19 @@ watch(showLogs, (newValue) => {
 
 // --- Player Logic ---
 const togglePlay = () => {
+    if (isAsleep.value) {
+    stationStore.wakeUpStation();
+    return;
+  }
+
+  // Safeguard: do not play if station is waiting for curator
+  if (isWaitingForCurator.value) {
+    return;
+  }
+
   if (!audioPlayer.value) return;
   if (audioPlayer.value.paused || audioPlayer.value.ended) {
     audioPlayer.value.play().catch(error => console.error('Error attempting to play audio:', error));
-    isPlaying.value = true;
     if (!audioCtx) { // Initialize visualizer on first play
       setupAudioVisualizer();
     }
@@ -182,8 +218,9 @@ const initializeHls = (radioName) => {
     }
   });
 
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    if (audioPlayer.value) {
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    // Do not autoplay if the station is waiting for a curator.
+    if (audioPlayer.value && !isWaitingForCurator.value) {
       audioPlayer.value.play().catch(error => {
         console.error('Autoplay on station switch failed:', error);
         // Sync UI state in case autoplay is blocked by the browser
@@ -206,7 +243,7 @@ const initializeHls = (radioName) => {
     }
   });
 
-    const streamUrl = `https://bratan.online/${radioName}/radio/stream.m3u8`;
+    const streamUrl = `/bratan-api/${radioName}/radio/stream.m3u8`;
   hls.loadSource(streamUrl);
   hls.attachMedia(audioPlayer.value);
 };
@@ -355,6 +392,11 @@ onBeforeUnmount(() => {
   animation: pulse-red 1.5s infinite;
 }
 
+.buffer-indicator.waiting {
+  background-color: #ffc107; /* Amber/Yellow */
+  animation: pulse-yellow 1.5s infinite;
+}
+
 @keyframes pulse-red {
   0% {
     box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
@@ -364,6 +406,18 @@ onBeforeUnmount(() => {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
+  }
+}
+
+@keyframes pulse-yellow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(255, 193, 7, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
   }
 }
 .logging-.controls {

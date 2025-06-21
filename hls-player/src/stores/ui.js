@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import { storageService } from '../services/storage';
 
 export const useUiStore = defineStore('ui', () => {
   // State: Initialize theme from localStorage or default to 'light'
-  const theme = ref('light'); // Force light theme on startup to reset persisted state
+  const theme = ref(storageService.getLastTheme() || 'light');
 
   // Action: Function to toggle the theme
   function toggleTheme() {
@@ -12,7 +13,7 @@ export const useUiStore = defineStore('ui', () => {
 
   // Watcher: Automatically save the theme to localStorage whenever it changes
   watch(theme, (newTheme) => {
-    localStorage.setItem('theme', newTheme);
+    storageService.saveLastTheme(newTheme);
     // Optional: Add/remove a class on the body element if needed for global non-component styles
     if (newTheme === 'dark') {
       document.body.classList.add('dark');
