@@ -113,15 +113,18 @@ export const useStationStore = defineStore('station', {
         }
         const data = await response.json();
 
+
         
         this.isAsleep = false; // Station is awake
         this.stationInfo = data;
         this.stationName = data.name || 'Unknown Radio';
 
-        // Check for WAITING_FOR_CURATOR status
-        if (data.currentStatus === 'WAITING_FOR_CURATOR') {
+        // Check for WAITING_FOR_CURATOR or OFFLINE status
+        if (data.currentStatus === 'WAITING_FOR_CURATOR' || data.currentStatus === 'OFF_LINE') {
           this.isWaitingForCurator = true;
-          this.statusText = 'Station is online, waiting for a curator.';
+          this.statusText = data.currentStatus === 'OFF_LINE' 
+            ? 'Station is offline.' 
+            : 'Station is online, but waiting for the curator to play something.';
         } else {
           this.isWaitingForCurator = false;
           // Construct the status text from other data if not waiting

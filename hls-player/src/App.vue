@@ -26,7 +26,7 @@
     </div>
   </n-config-provider>
   <footer>
-    <p class="version-text">v.1.5</p>
+    <p class="version-text">v.1.6</p>
   </footer>
 </template>
 
@@ -77,6 +77,13 @@ const themeOverrides = {
 };
 
 const dynamicBorderStyle = computed(() => {
+  if (stationStore.isWarmingUp) {
+    return {
+      '--dynamic-border-rgb': '128, 128, 128',
+      '--dynamic-border-color': 'rgba(128, 128, 128, 0.5)',
+    };
+  }
+
   const style = { ...stationStore.dynamicBorderStyle };
   if (style['--dynamic-border-color']) {
     const intensity = stationStore.animationIntensity;
@@ -86,6 +93,8 @@ const dynamicBorderStyle = computed(() => {
   }
   return style;
 });
+
+
 
 const naiveTheme = computed(() => (uiStore.theme === 'dark' ? darkTheme : null));
 

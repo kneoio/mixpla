@@ -59,13 +59,17 @@ const isPlaying = ref(false);
 const bufferStatus = ref('ok'); // ok, stalling, fatal
 
 const indicatorClass = computed(() => {
-  if (isWaitingForCurator.value) {
-    return 'waiting';
-  }
+  if (isAsleep.value) return 'waiting';
+  if (isWaitingForCurator.value) return 'waiting';
+  if (isWarmingUp.value) return 'waiting';
   return bufferStatus.value;
 });
 
 const bufferStatusText = computed(() => {
+  if (isAsleep.value) return 'Asleep';
+  if (isWaitingForCurator.value) return 'Waiting for Curator';
+  if (isWarmingUp.value) return 'Warming Up';
+
   switch (bufferStatus.value) {
     case 'ok':
       return 'Healthy';
@@ -190,16 +194,17 @@ const initializeHls = (radioName) => {
     setupAudioVisualizer();
   });
 
-  hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-    console.log('Manifest loaded, found ' + data.levels.length + ' quality level');
-    bufferStatus.value = 'ok';
-    // Attempt to play, but handle autoplay restrictions gracefully.
-    audioPlayer.value.play().then(() => {
-      isPlaying.value = true;
-    }).catch(error => {
-      console.warn('Autoplay was prevented by the browser.');
-      isPlaying.value = false; // Ensure UI shows the play button
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    console.log('[Player] Manifest parsed, attempting to play...');
+    audioPlayer.value.play().catch(e => {
+        console.error('Error on autoplay:', e);
     });
+
+    if (!audioCtx) { // Check if visualizer is already set up
+        console.log('[Player] Setting up audio visualizer.');
+        setupAudioVisualizer();
+        renderFrame();
+    }
   });
   
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
