@@ -23,11 +23,7 @@
         </n-button>
       </div>
 
-      <!-- Buffer Status -->
-      <div class="status-indicator-wrapper">
-        <div :class="['buffer-indicator', indicatorClass]"></div>
-        <span>{{ bufferStatusText }}</span>
-      </div>
+      <!-- Buffer Status Indicator is now in App.vue -->
 
       <!-- Station Status Text -->
       <div class="station-status">
@@ -56,36 +52,9 @@ const audioPlayer = ref(null);
 let hls = null;
 const isPlaying = ref(false);
 
-const bufferStatus = ref('ok'); // ok, stalling, fatal
-
-const indicatorClass = computed(() => {
-  if (isAsleep.value) return 'waiting';
-  if (isWaitingForCurator.value) return 'waiting';
-  if (isWarmingUp.value) return 'waiting';
-  return bufferStatus.value;
-});
-
-const bufferStatusText = computed(() => {
-  if (isAsleep.value) return 'Asleep';
-  if (isWaitingForCurator.value) return 'Waiting for Curator';
-  if (isWarmingUp.value) return 'Warming Up';
-
-  switch (bufferStatus.value) {
-    case 'ok':
-      return 'Healthy';
-    case 'stalling':
-      return 'Unstable';
-    case 'fatal':
-      return 'Not Available';
-    default:
-      return '...';
-  }
-});
-
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp } = storeToRefs(stationStore); // Use storeToRefs for reactivity
-const successfulFragmentsAfterStall = ref(0);
 
 // Audio visualizer state
 let audioCtx = null;
@@ -190,9 +159,7 @@ const initializeHls = (radioName) => {
   hls.loadSource(streamUrl);
   hls.attachMedia(audioPlayer.value);
 
-  hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-    setupAudioVisualizer();
-  });
+
 
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
     console.log('[Player] Manifest parsed, attempting to play...');
@@ -215,19 +182,15 @@ const initializeHls = (radioName) => {
   });
 
   hls.on(Hls.Events.FRAG_BUFFERED, (event, data) => {
-    if (bufferStatus.value === 'stalling') {
-      successfulFragmentsAfterStall.value++;
-      if (successfulFragmentsAfterStall.value >= 2) {
-        bufferStatus.value = 'ok';
-        successfulFragmentsAfterStall.value = 0;
-      }
+    if (stationStore.bufferStatus === 'stalling') {
+      stationStore.setBufferStatus('ok');
     }
   });
 
   hls.on(Hls.Events.ERROR, (event, data) => {
     if (data.fatal) {
       console.error('HLS.js fatal error:', data);
-      bufferStatus.value = 'fatal';
+      stationStore.setBufferStatus('fatal');
       // Attempt to recover
       switch (data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
@@ -247,8 +210,7 @@ const initializeHls = (radioName) => {
   });
 
   hls.on(Hls.Events.BUFFER_STALLED, (event, data) => {
-    bufferStatus.value = 'stalling';
-    successfulFragmentsAfterStall.value = 0;
+    stationStore.setBufferStatus('stalling');
   });
 };
 
@@ -349,59 +311,6 @@ onBeforeUnmount(() => {
 
 
 
-.status-indicator-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: #aaa;
-}
 
-.buffer-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
-}
-
-.buffer-indicator.ok {
-  background-color: #4caf50; /* Green */
-}
-
-.buffer-indicator.stalling,
-.buffer-indicator.fatal {
-  background-color: #f44336; /* Red */
-  animation: pulse-red 1.5s infinite;
-}
-
-.buffer-indicator.waiting {
-  background-color: #ffc107; /* Amber/Yellow */
-  animation: pulse-yellow 1.5s infinite;
-}
-
-@keyframes pulse-red {
-  0% {
-    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(244, 67, 54, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
-  }
-}
-
-@keyframes pulse-yellow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(255, 193, 7, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
-  }
-}
 
 </style>

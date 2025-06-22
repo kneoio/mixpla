@@ -28,6 +28,7 @@ export const useStationStore = defineStore('station', {
     isAsleep: false, // new state to indicate if station is asleep
     isWaitingForCurator: false, // new state for when station is online but idle
     isWarmingUp: false,
+    bufferStatus: 'ok', // ok, stalling, fatal
   }),
 
   getters: {
@@ -49,6 +50,11 @@ export const useStationStore = defineStore('station', {
   },
 
   actions: {
+    setBufferStatus(status) {
+      if (['ok', 'stalling', 'fatal'].includes(status)) {
+        this.bufferStatus = status;
+      }
+    },
     async updateStationsList() {
       try {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/radio/stations`);

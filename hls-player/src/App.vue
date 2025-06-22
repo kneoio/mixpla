@@ -11,12 +11,15 @@
             @click="stationStore.setStation(station.name)"
             :style="getStationStyle(station)"
           >
-            {{ station.name.charAt(0).toUpperCase() + station.name.slice(1) }}
+            {{ formatStationName(station.name) }}
           </n-button>
         </n-button-group>
         <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="stationStore.setStation">
           <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
         </n-dropdown>
+      </div>
+      <div class="status-indicator-wrapper-top-left">
+        <div :class="['buffer-indicator', indicatorClass]"></div>
       </div>
       <div class="theme-switch-wrapper">
         <n-switch :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" />
@@ -26,7 +29,7 @@
     </div>
   </n-config-provider>
   <footer>
-    <p class="version-text">v.1.6</p>
+    <p class="version-text">v.1.7</p>
   </footer>
 </template>
 
@@ -41,31 +44,44 @@ import { useStationStore } from './stores/station';
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 
-const mainStations = computed(() => stationStore.stations.slice(0, 3));
-const dropdownStations = computed(() => stationStore.stations.slice(3));
+const mainStations = computed(() => stationStore.stations.slice(0, 4));
+const dropdownStations = computed(() => stationStore.stations.slice(4));
 
 const getStationStyle = (station) => {
   const activeStatuses = ['ONLINE', 'BROADCASTING', 'WAITING_FOR_CURATOR'];
   if (activeStatuses.includes(station.currentStatus)) {
     return { color: station.color };
   }
-  return { color: '#808080' }; // Grey for offline
+  return {};
 };
 
-const renderDropdownLabel = (station) => {
-  return h('span', { style: getStationStyle(station) }, station.name.charAt(0).toUpperCase() + station.name.slice(1));
+const formatStationName = (name) => {
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+  return capitalized.length > 6 ? `${capitalized.substring(0, 6)}...` : capitalized;
 };
 
-const dropdownOptions = computed(() => 
+
+
+const dropdownOptions = computed(() =>
   dropdownStations.value.map(station => ({
+    label: formatStationName(station.name),
     key: station.name,
-    label: () => renderDropdownLabel(station)
+    props: {
+      style: getStationStyle(station)
+    }
   }))
 );
 
 const isDropdownStationActive = computed(() => 
   dropdownStations.value.some(s => s.name === stationStore.radioName)
 );
+
+const indicatorClass = computed(() => {
+  if (stationStore.isAsleep) return 'waiting';
+  if (stationStore.isWaitingForCurator) return 'waiting';
+  if (stationStore.isWarmingUp) return 'waiting';
+  return stationStore.bufferStatus;
+});
 
 const themeOverrides = {
   common: {
@@ -122,6 +138,60 @@ watch(() => uiStore.theme, (newTheme) => {
 </script>
 
 <style>
+.status-indicator-wrapper-top-left {
+  position: fixed;
+  top: 22px;
+  left: 22px;
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+
+.buffer-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.buffer-indicator.ok {
+  background-color: #4caf50; /* Green */
+}
+
+.buffer-indicator.stalling,
+.buffer-indicator.fatal {
+  background-color: #f44336; /* Red */
+  animation: pulse-red 1.5s infinite;
+}
+
+.buffer-indicator.waiting {
+  background-color: #ffc107; /* Amber/Yellow */
+  animation: pulse-yellow 1.5s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(244, 67, 54, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
+  }
+}
+
+@keyframes pulse-yellow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(255, 193, 7, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+  }
+}
 html {
   box-sizing: border-box;
 }
