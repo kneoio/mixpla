@@ -26,7 +26,7 @@
     </div>
   </n-config-provider>
   <footer>
-    <p class="version-text">v.1.4</p>
+    <p class="version-text">v.1.5</p>
   </footer>
 </template>
 
@@ -69,10 +69,10 @@ const isDropdownStationActive = computed(() =>
 
 const themeOverrides = {
   common: {
-    primaryColor: '#6b7280', // gray-500
-    primaryColorHover: '#4b5563', // gray-600
-    primaryColorPressed: '#374151', // gray-700
-    primaryColorSuppl: '#4b5563'
+    primaryColor: '#4b5563', // gray-600
+    primaryColorHover: '#374151', // gray-700
+    primaryColorPressed: '#1f2937', // gray-800
+    primaryColorSuppl: '#374151' // gray-700
   }
 };
 

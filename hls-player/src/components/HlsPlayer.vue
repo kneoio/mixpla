@@ -16,7 +16,7 @@
 
       <!-- Controls -->
       <div class="controls">
-        <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWakingUp || isWaitingForCurator">
+        <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWarmingUp || isWaitingForCurator">
           <template #icon>
             <n-icon :component="playIcon" />
           </template>
@@ -80,7 +80,7 @@ const bufferStatusText = computed(() => {
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
-const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator } = storeToRefs(stationStore); // Use storeToRefs for reactivity
+const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp } = storeToRefs(stationStore); // Use storeToRefs for reactivity
 const successfulFragmentsAfterStall = ref(0);
 
 // Audio visualizer state
@@ -90,7 +90,6 @@ let source = null;
 let animationFrameId = null;
 
 // --- Computed Properties ---
-const isWakingUp = computed(() => statusText.value === 'Station is warming up, please wait...');
 const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
 
 

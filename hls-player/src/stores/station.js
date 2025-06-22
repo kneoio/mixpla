@@ -113,7 +113,7 @@ export const useStationStore = defineStore('station', {
         }
         const data = await response.json();
 
-        this.isWarmingUp = false; // No longer warming up once we get a valid status
+        
         this.isAsleep = false; // Station is awake
         this.stationInfo = data;
         this.stationName = data.name || 'Unknown Radio';
@@ -158,16 +158,24 @@ export const useStationStore = defineStore('station', {
         if (!this.radioName) return;
         this.isWarmingUp = true;
         this.statusText = 'Station is warming up, please wait...';
+
+        // Set a timer to turn off warming up state after 10 seconds
+        setTimeout(() => {
+            this.isWarmingUp = false;
+        }, 10000);
+
         const endpoint = `${import.meta.env.VITE_API_BASE_URL}/${this.radioName}/radio/wakeup`;
         try {
             const response = await fetch(endpoint, { method: 'PUT' });
             if (!response.ok) {
+                this.isWarmingUp = false; // Stop warming up on failure
                 throw new Error(`Wake-up call failed with status: ${response.status}`);
             }
             // After sending wakeup, we can start polling for status change
             this.startPolling(true); // fast polling
         } catch (error) {
             console.error('Error waking up station:', error);
+            this.isWarmingUp = false; // Stop warming up on failure
             this.statusText = 'Failed to wake up station.';
         }
     },
@@ -186,7 +194,9 @@ export const useStationStore = defineStore('station', {
     startPolling(fast = false) {
       this.stopPolling(); // Ensure no multiple intervals are running
       this.fetchStationInfo(); // Fetch immediately on start
-      const interval = fast ? 5000 : 30000; // Poll more frequently if waking up, otherwise every 30s
+      const fastInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_FAST_MS, 10) || 5000;
+      const regularInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_REGULAR_MS, 10) || 15000;
+      const interval = fast ? fastInterval : regularInterval;
       // Poll for updates
       this.statusPollingInterval = setInterval(() => {
         this.fetchStationInfo();
@@ -202,9 +212,10 @@ export const useStationStore = defineStore('station', {
 
     startListPolling() {
       this.stopListPolling(); // prevent duplicates
+      const listInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_LIST_MS, 10) || 60000;
       this.listPollingInterval = setInterval(() => {
         this.updateStationsList();
-      }, 60000); // every 60 seconds
+      }, listInterval);
     },
 
     stopListPolling() {
