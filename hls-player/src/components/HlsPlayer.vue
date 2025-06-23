@@ -7,6 +7,9 @@
       <!-- Station Info -->
       <div class="station-info" :style="darkThemeTextStyle">
         <h1 class="station-name">{{ stationName }}</h1>
+        <div class="curator-info" :style="[{ visibility: curatorText ? 'visible' : 'hidden' }, dynamicColorStyle]">
+          {{ displayedCuratorText }}<span class="blinking-cursor" v-if="isTyping">|</span>
+        </div>
       </div>
 
       <!-- Now Playing Info -->
@@ -54,7 +57,11 @@ const isPlaying = ref(false);
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
-const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp } = storeToRefs(stationStore); // Use storeToRefs for reactivity
+const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore); // Use storeToRefs for reactivity
+
+const displayedCuratorText = ref('');
+let typingTimeout = null;
+let retypeInterval = null;
 
 // Audio visualizer state
 let audioCtx = null;
@@ -65,6 +72,20 @@ let animationFrameId = null;
 // --- Computed Properties ---
 const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
 
+const isTyping = ref(false);
+
+const curatorText = computed(() => {
+  if (djName.value && djStatus.value === 'CONTROLLING') {
+    return `Curated by ${djName.value}`;
+  }
+  return null;
+});
+
+
+const dynamicColorStyle = computed(() => {
+  const color = stationColor.value || (uiStore.theme === 'dark' ? '#FFFFFF' : '#000000');
+  return { color };
+});
 
 const darkThemeTextStyle = computed(() => {
   if (uiStore.theme === 'dark') {
@@ -77,6 +98,40 @@ const darkThemeTextStyle = computed(() => {
 });
 
 // --- Watchers ---
+const startTypingAnimation = (text) => {
+  if (typingTimeout) clearTimeout(typingTimeout);
+  displayedCuratorText.value = '';
+  isTyping.value = false;
+
+  if (text) {
+    isTyping.value = true;
+    let i = 0;
+    const type = () => {
+      if (i < text.length) {
+        displayedCuratorText.value += text.charAt(i);
+        i++;
+        typingTimeout = setTimeout(type, 100);
+      } else {
+        isTyping.value = false;
+      }
+    };
+    type();
+  }
+};
+
+watch(curatorText, (newText, oldText) => {
+  if (retypeInterval) clearInterval(retypeInterval);
+  
+  if (newText) {
+    startTypingAnimation(newText); // Type immediately
+    retypeInterval = setInterval(() => {
+      startTypingAnimation(newText); // Retype every 15s
+    }, 15000);
+  } else {
+    startTypingAnimation(null); // Clear text and stop typing
+  }
+});
+
 watch(
   () => ({
     name: radioName.value,
@@ -115,23 +170,23 @@ watch(
 
 // --- Player Logic ---
 const togglePlay = () => {
-    if (isAsleep.value) {
+  if (isAsleep.value) {
     stationStore.wakeUpStation();
     return;
   }
-
-  // Safeguard: do not play if station is waiting for curator
   if (isWaitingForCurator.value) {
     return;
   }
-
   if (!audioPlayer.value) return;
-  if (audioPlayer.value.paused || audioPlayer.value.ended) {
-    audioPlayer.value.play().catch(error => console.error('Error attempting to play audio:', error));
-    if (!audioCtx) { // Initialize visualizer on first play
-      setupAudioVisualizer();
-    }
-    renderFrame(); // Start animation loop
+
+  // On iOS, AudioContext must be resumed by a user gesture.
+  // This ensures that if context exists and is suspended, a click will resume it.
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  if (audioPlayer.value.paused) {
+    audioPlayer.value.play().catch(e => console.error('Play error:', e));
   } else {
     audioPlayer.value.pause();
   }
@@ -146,7 +201,7 @@ const initializeHls = (radioName) => {
     return;
   }
 
-  const streamUrl = `${import.meta.env.VITE_API_BASE_URL}/${radioName}/radio/stream.m3u8`;
+    const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${radioName}/radio/stream.m3u8`;
   hls = new Hls({
     debug: false,
     maxBufferLength: 30,
@@ -166,12 +221,6 @@ const initializeHls = (radioName) => {
     audioPlayer.value.play().catch(e => {
         console.error('Error on autoplay:', e);
     });
-
-    if (!audioCtx) { // Check if visualizer is already set up
-        console.log('[Player] Setting up audio visualizer.');
-        setupAudioVisualizer();
-        renderFrame();
-    }
   });
   
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
@@ -229,22 +278,21 @@ function setupAudioVisualizer() {
 }
 
 function renderFrame() {
-  if (!analyser) {
-    animationFrameId = requestAnimationFrame(renderFrame);
-    return;
-  }
+  if (!analyser) return; // Safety check
+
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
   analyser.getByteTimeDomainData(dataArray);
 
   let sum = 0;
   for (let i = 0; i < bufferLength; i++) {
-    const val = dataArray[i] / 128.0 - 1.0; // Normalize to -1.0 to 1.0
+    const val = dataArray[i] / 128.0 - 1.0;
     sum += val * val;
   }
   const rms = Math.sqrt(sum / bufferLength);
-  stationStore.animationIntensity = Math.min(rms * 5, 1.0); // Amplify and clamp
+  stationStore.animationIntensity = Math.min(rms * 5, 1.0);
 
+  // Keep the loop going
   animationFrameId = requestAnimationFrame(renderFrame);
 }
 
@@ -253,9 +301,28 @@ onMounted(() => {
   const audio = audioPlayer.value;
   if (!audio) return;
 
-  audio.addEventListener('play', () => { isPlaying.value = true; });
-  audio.addEventListener('pause', () => { isPlaying.value = false; });
-  audio.addEventListener('ended', () => { isPlaying.value = false; });
+  const onPlay = () => {
+    isPlaying.value = true;
+    // One-time setup for the visualizer, triggered by the first actual play event.
+    if (!audioCtx) {
+      setupAudioVisualizer();
+    }
+    // Start the animation loop.
+    renderFrame();
+  };
+
+  const onPauseOrEnd = () => {
+    isPlaying.value = false;
+    // Stop the animation loop.
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+  };
+
+  audio.addEventListener('play', onPlay);
+  audio.addEventListener('pause', onPauseOrEnd);
+  audio.addEventListener('ended', onPauseOrEnd);
 });
 
 onBeforeUnmount(() => {
@@ -265,6 +332,8 @@ onBeforeUnmount(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
   }
+  if (typingTimeout) clearTimeout(typingTimeout);
+  if (retypeInterval) clearInterval(retypeInterval);
   if (audioCtx) {
     audioCtx.close();
   }
@@ -297,16 +366,36 @@ onBeforeUnmount(() => {
 }
 
 .station-name {
-  font-size: 1.5rem;
   font-weight: bold;
+  font-size: 1.5rem;
   margin: 0;
-  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .station-status {
   font-size: 0.75rem;
   color: #aaa;
   min-height: 1em; /* Reserve space to prevent layout shift */
+}
+
+.curator-info {
+  font-family: 'Goldman', sans-serif;
+  font-size: 0.85rem;
+  margin-top: 4px;
+  min-height: 1.2em; /* Reserve space to prevent layout jump */
+}
+
+.blinking-cursor {
+  animation: blink-opacity 1s step-end infinite;
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+@keyframes blink-opacity {
+  from, to { opacity: 0; }
+  50% { opacity: 1; }
 }
 
 

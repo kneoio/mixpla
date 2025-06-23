@@ -1,7 +1,5 @@
 import { defineStore } from 'pinia';
-import axios from 'axios';
-
-const API_BASE_URL = 'https://bratan.online';
+import apiClient from '../services/api'; // Use our configured axios instance
 const STATUS_PATH_SUFFIX = '/radio/status';
 const STATUS_REFRESH_INTERVAL = 15000;
 
@@ -51,7 +49,7 @@ export const useRadioStatusStore = defineStore('radioStatus', {
       this.error = null;
 
       try {
-        const response = await axios.get(`${API_BASE_URL}/${radioName}${STATUS_PATH_SUFFIX}`);
+                const response = await apiClient.get(`/${radioName}${STATUS_PATH_SUFFIX}`);
         this.statusData = response.data;
         this.stationName = response.data.name || 'Unknown Radio';
       } catch (err) {

@@ -1,132 +1,35 @@
 <template>
   <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
     <n-global-style />
-    <div id="app-container" :style="dynamicBorderStyle" :class="{ 'warming-up': stationStore.isWarmingUp }">
-      <div class="station-selector-wrapper">
-        <n-button-group>
-          <n-button
-            v-for="station in mainStations"
-            :key="station.name"
-            :type="stationStore.radioName === station.name ? 'primary' : 'default'"
-            @click="stationStore.setStation(station.name)"
-            :style="getStationStyle(station)"
-          >
-            {{ formatStationName(station.name) }}
-          </n-button>
-        </n-button-group>
-        <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="stationStore.setStation">
-          <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
-        </n-dropdown>
-      </div>
-      <div class="status-indicator-wrapper-top-left">
-        <div :class="['buffer-indicator', indicatorClass]"></div>
-      </div>
-      <div class="theme-switch-wrapper">
-        <n-switch :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" />
-        <span>Dark Mode</span>
-      </div>
-      <HlsPlayer />
+    <div id="nav">
+      <router-link to="/">Home</router-link> | 
+      <router-link to="/profile">Profile</router-link>
     </div>
+    <router-view />
+    <footer>
+      <p class="version-text">v.1.8</p>
+    </footer>
   </n-config-provider>
-  <footer>
-    <p class="version-text">v.1.7</p>
-  </footer>
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, computed, watch, ref, h } from 'vue';
-import { NConfigProvider, NGlobalStyle, darkTheme, NButton, NDropdown, NButtonGroup } from 'naive-ui';
-import HlsPlayer from './components/HlsPlayer.vue';
+import { computed, watch } from 'vue';
+import { NConfigProvider, NGlobalStyle, darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
-import { NSwitch } from 'naive-ui';
-import { useStationStore } from './stores/station';
 
 const uiStore = useUiStore();
-const stationStore = useStationStore();
-
-const mainStations = computed(() => stationStore.stations.slice(0, 4));
-const dropdownStations = computed(() => stationStore.stations.slice(4));
-
-const getStationStyle = (station) => {
-  const activeStatuses = ['ONLINE', 'BROADCASTING', 'WAITING_FOR_CURATOR'];
-  if (activeStatuses.includes(station.currentStatus)) {
-    return { color: station.color };
-  }
-  return {};
-};
-
-const formatStationName = (name) => {
-  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
-  return capitalized.length > 6 ? `${capitalized.substring(0, 6)}...` : capitalized;
-};
-
-
-
-const dropdownOptions = computed(() =>
-  dropdownStations.value.map(station => ({
-    label: formatStationName(station.name),
-    key: station.name,
-    props: {
-      style: getStationStyle(station)
-    }
-  }))
-);
-
-const isDropdownStationActive = computed(() => 
-  dropdownStations.value.some(s => s.name === stationStore.radioName)
-);
-
-const indicatorClass = computed(() => {
-  if (stationStore.isAsleep) return 'waiting';
-  if (stationStore.isWaitingForCurator) return 'waiting';
-  if (stationStore.isWarmingUp) return 'waiting';
-  return stationStore.bufferStatus;
-});
-
-const themeOverrides = {
-  common: {
-    primaryColor: '#4b5563', // gray-600
-    primaryColorHover: '#374151', // gray-700
-    primaryColorPressed: '#1f2937', // gray-800
-    primaryColorSuppl: '#374151' // gray-700
-  }
-};
-
-const dynamicBorderStyle = computed(() => {
-  if (stationStore.isWarmingUp) {
-    return {
-      '--dynamic-border-rgb': '128, 128, 128',
-      '--dynamic-border-color': 'rgba(128, 128, 128, 0.5)',
-    };
-  }
-
-  const style = { ...stationStore.dynamicBorderStyle };
-  if (style['--dynamic-border-color']) {
-    const intensity = stationStore.animationIntensity;
-    const blur = 5 + intensity * 20; // from 5px to 25px
-    const spread = 2 + intensity * 6; // from 2px to 8px
-    style.boxShadow = `0 0 ${blur}px ${spread}px rgba(var(--dynamic-border-rgb), 0.7)`;
-  }
-  return style;
-});
-
-
 
 const naiveTheme = computed(() => (uiStore.theme === 'dark' ? darkTheme : null));
 
-onMounted(() => {
-  stationStore.fetchStations();
-});
+const themeOverrides = {
+  common: {
+    primaryColor: '#4b5563',
+    primaryColorHover: '#374151',
+    primaryColorPressed: '#1f2937',
+    primaryColorSuppl: '#374151'
+  }
+};
 
-onBeforeUnmount(() => {
-  stationStore.stopPolling();
-  stationStore.stopListPolling();
-});
-
-// Watch for theme changes and apply background color to the body
-
-
-// Watch for theme changes and apply background color to the body
 watch(() => uiStore.theme, (newTheme) => {
   const body = document.body;
   if (newTheme === 'dark') {
@@ -138,6 +41,20 @@ watch(() => uiStore.theme, (newTheme) => {
 </script>
 
 <style>
+@font-face {
+  font-family: 'Goldman';
+  src: url('./assets/fonts/Goldman-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Goldman';
+  src: url('./assets/fonts/Goldman-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
 .status-indicator-wrapper-top-left {
   position: fixed;
   top: 22px;

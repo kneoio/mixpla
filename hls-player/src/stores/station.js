@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { storageService } from '../services/storage';
+import apiClient from '../services/api';
 
 // Helper function to lighten/darken a hex color
 const lightenColor = (hex, percent) => {
@@ -28,7 +29,9 @@ export const useStationStore = defineStore('station', {
     isAsleep: false, // new state to indicate if station is asleep
     isWaitingForCurator: false, // new state for when station is online but idle
     isWarmingUp: false,
-    bufferStatus: 'ok', // ok, stalling, fatal
+    bufferStatus: 'ok', // ok, stalling, fatal,
+    djName: null,
+    djStatus: null,
   }),
 
   getters: {
@@ -57,11 +60,8 @@ export const useStationStore = defineStore('station', {
     },
     async updateStationsList() {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/radio/stations`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch stations list');
-        }
-        this.stations = await response.json();
+        const response = await apiClient.get('/radio/stations');
+        this.stations = response.data;
       } catch (error) {
         console.error('Error updating stations list:', error);
       }
@@ -69,11 +69,8 @@ export const useStationStore = defineStore('station', {
 
     async fetchStations() {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/radio/stations`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch stations list');
-        }
-        this.stations = await response.json();
+        const response = await apiClient.get('/radio/stations');
+        this.stations = response.data;
         const stationExists = this.stations.some(s => s.name === this.radioName);
 
         if (!this.radioName || !stationExists) {
@@ -95,44 +92,22 @@ export const useStationStore = defineStore('station', {
     async fetchStationInfo() {
       if (!this.radioName) return;
 
-      const endpoint = `${import.meta.env.VITE_API_BASE_URL}/${this.radioName}/radio/status`;
       try {
-        const response = await fetch(endpoint);
-
-        if (!response.ok) {
-            if (response.status === 404) {
-                const responseText = await response.text();
-                console.log(`[Debug] 404 response text: ${responseText}`);
-                if (responseText.includes("Radio station not broadcasting")) {
-                    console.log('[Debug] Station identified as asleep.');
-                    this.isWarmingUp = false;
-                    this.isAsleep = true;
-                    this.statusText = 'Station is asleep. Press play to wake it up.';
-                    this.stationName = this.radioName;
-                    this.stationInfo = null;
-                    this.stationColor = '#808080'; // Grey color for asleep state
-                    return; // Stop further processing
-                }
-            }
-            // If it's another error or the 404 message doesn't match, throw an error.
-            throw new Error(`Server responded with ${response.status}`);
-        }
-        const data = await response.json();
-
-
-        
-        this.isAsleep = false; // Station is awake
+        const response = await apiClient.get(`/${this.radioName}/radio/status`);
+        const data = response.data;
         this.stationInfo = data;
-        this.stationName = data.name || 'Unknown Radio';
+        this.stationName = data.name || this.radioName;
+        this.djName = data.djName;
+        this.djStatus = data.djStatus;
+        this.isWarmingUp = false; // Stop warming up on successful fetch
 
-        // Check for WAITING_FOR_CURATOR or OFFLINE status
-        if (data.currentStatus === 'WAITING_FOR_CURATOR' || data.currentStatus === 'OFF_LINE') {
+        if (data.status === 'ONLINE' && data.currentSong === 'Waiting for curator to start the broadcast...') {
           this.isWaitingForCurator = true;
-          this.statusText = data.currentStatus === 'OFF_LINE' 
-            ? 'Station is offline.' 
-            : 'Station is online, but waiting for the curator to play something.';
+          this.statusText = 'Station is online, waiting for curator...';
+          this.isAsleep = false;
         } else {
           this.isWaitingForCurator = false;
+          this.isAsleep = false;
           // Construct the status text from other data if not waiting
           let displayMessageParts = [];
           if (data.managedBy) displayMessageParts.push(`Mode: ${data.managedBy}`);
@@ -142,24 +117,29 @@ export const useStationStore = defineStore('station', {
           this.statusText = displayMessageParts.join(', ');
         }
         
-        
         if (data.color && data.color.match(/^#[0-9a-fA-F]{6}$/)) {
           this.stationColor = data.color;
         } else {
           this.stationColor = null;
         }
-
-
-
       } catch (error) {
+        if (error.response && error.response.status === 404) {
+            const responseText = error.response.data;
+            if (typeof responseText === 'string' && responseText.includes("Radio station not broadcasting")) {
+                console.log('[Debug] Station identified as asleep.');
+                this.isWarmingUp = false;
+                this.isAsleep = true;
+                this.statusText = 'Station is asleep. Click to wake it up.';
+                this.stationName = this.radioName;
+                this.stopPolling();
+                return;
+            }
+        }
         console.error(`Failed to fetch station status for ${this.radioName}:`, error);
         this.isWarmingUp = false;
         this.isAsleep = false;
         this.isWaitingForCurator = false;
         this.statusText = `Error: Could not fetch station status.`;
-        this.stationName = 'Radio Unavailable';
-        this.stationInfo = null;
-        this.stationColor = null;
       }
     },
 
@@ -168,23 +148,18 @@ export const useStationStore = defineStore('station', {
         this.isWarmingUp = true;
         this.statusText = 'Station is warming up, please wait...';
 
-        // Set a timer to turn off warming up state after 10 seconds
         setTimeout(() => {
-            this.isWarmingUp = false;
+            if (this.isWarmingUp) {
+                this.isWarmingUp = false;
+            }
         }, 10000);
 
-        const endpoint = `${import.meta.env.VITE_API_BASE_URL}/${this.radioName}/radio/wakeup`;
         try {
-            const response = await fetch(endpoint, { method: 'PUT' });
-            if (!response.ok) {
-                this.isWarmingUp = false; // Stop warming up on failure
-                throw new Error(`Wake-up call failed with status: ${response.status}`);
-            }
-            // After sending wakeup, we can start polling for status change
+            await apiClient.put(`/${this.radioName}/radio/wakeup`);
             this.startPolling(true); // fast polling
         } catch (error) {
             console.error('Error waking up station:', error);
-            this.isWarmingUp = false; // Stop warming up on failure
+            this.isWarmingUp = false;
             this.statusText = 'Failed to wake up station.';
         }
     },
@@ -195,6 +170,8 @@ export const useStationStore = defineStore('station', {
         storageService.saveLastStation(newStationName); // Save to local storage
         this.isAsleep = false; // Reset asleep status on station change
         this.isWaitingForCurator = false; // Reset waiting status on station change
+        this.djName = null;
+        this.djStatus = null;
         // When station changes, we want to immediately fetch the new info
         this.startPolling();
       }
