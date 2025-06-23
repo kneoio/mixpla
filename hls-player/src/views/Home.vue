@@ -1,5 +1,5 @@
 <template>
-  <div id="app-container" :style="dynamicBorderStyle" :class="{ 'warming-up': stationStore.isWarmingUp }">
+  <div id="app-container" :style="[dynamicBorderStyle, pulsingBorderStyle]" :class="{ 'warming-up': isWarmingUp }">
     <div class="station-selector-wrapper">
       <n-button-group>
         <n-button
@@ -46,23 +46,38 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, computed, watch, ref, h } from 'vue';
+import { onMounted, computed, watch } from 'vue';
 import { NButton, NDropdown, NButtonGroup, NSwitch } from 'naive-ui';
 import HlsPlayer from '../components/HlsPlayer.vue';
+import './Home.css';
 import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
 import { useAuthStore } from '../stores/auth';
+import { storeToRefs } from 'pinia';
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const authStore = useAuthStore();
 
+const {
+  stations,
+  radioName,
+  isAsleep,
+  isWaitingForCurator,
+  isWarmingUp,
+  bufferStatus,
+  dynamicBorderStyle: storeDynamicBorderStyle,
+  isBroadcasting,
+  animationIntensity,
+  stationColor
+} = storeToRefs(stationStore);
+
 onMounted(() => {
   stationStore.fetchStations();
 });
 
-const mainStations = computed(() => stationStore.stations.slice(0, 4));
-const dropdownStations = computed(() => stationStore.stations.slice(4));
+const mainStations = computed(() => stations.value.slice(0, 4));
+const dropdownStations = computed(() => stations.value.slice(4));
 
 const getStationStyle = (station) => {
   const activeStatuses = ['ONLINE', 'BROADCASTING', 'WAITING_FOR_CURATOR'];
@@ -87,130 +102,60 @@ const dropdownOptions = computed(() =>
   }))
 );
 
-const isDropdownStationActive = computed(() => 
-  dropdownStations.value.some(s => s.name === stationStore.radioName)
+const isDropdownStationActive = computed(() =>
+  dropdownStations.value.some(s => s.name === radioName.value)
 );
 
 const indicatorClass = computed(() => {
-  if (stationStore.isAsleep) return 'waiting';
-  if (stationStore.isWaitingForCurator) return 'waiting';
-  if (stationStore.isWarmingUp) return 'waiting';
-  return stationStore.bufferStatus;
+  if (isAsleep.value) return 'waiting';
+  if (isWaitingForCurator.value) return 'waiting';
+  if (isWarmingUp.value) return 'waiting';
+  return bufferStatus.value;
 });
 
 const dynamicBorderStyle = computed(() => {
-  if (stationStore.isWarmingUp) {
+  if (isWarmingUp.value) {
     return {
       '--dynamic-border-rgb': '128, 128, 128',
-      '--dynamic-border-color': 'rgba(128, 128, 128, 0.5)',
     };
   }
-
-  const style = { ...stationStore.dynamicBorderStyle };
-  if (stationStore.isBroadcasting) {
-    style.animation = 'fire-flicker 2s infinite linear';
-  }
-  return style;
+  return storeDynamicBorderStyle.value;
 });
 
-watch(() => stationStore.radioName, (newName, oldName) => {
+const pulsingBorderStyle = computed(() => {
+  if (!isBroadcasting.value) return {};
+
+  const intensity = animationIntensity.value;
+  const color = stationColor.value || '#FFA500';
+
+  let r = 0, g = 0, b = 0;
+  if (color.startsWith('#') && color.length === 7) {
+    r = parseInt(color.substring(1, 3), 16);
+    g = parseInt(color.substring(3, 5), 16);
+    b = parseInt(color.substring(5, 7), 16);
+  } else if (color.startsWith('#') && color.length === 4) {
+    const rHex = color.substring(1, 2);
+    const gHex = color.substring(2, 3);
+    const bHex = color.substring(3, 4);
+    r = parseInt(rHex + rHex, 16);
+    g = parseInt(gHex + gHex, 16);
+    b = parseInt(bHex + bHex, 16);
+  }
+
+  const spread = 5 + (intensity * 20);
+  const blur = 10 + (intensity * 15);
+  const alpha = 0.4 + (intensity * 0.4);
+
+  return {
+    boxShadow: `0 0 ${blur}px ${spread}px rgba(${r}, ${g}, ${b}, ${alpha})`,
+    transition: 'box-shadow 0.05s linear'
+  };
+});
+
+watch(() => radioName.value, (newName, oldName) => {
   if (newName && newName !== oldName) {
     console.log(`Station changed to: ${newName}`);
   }
 }, { immediate: true });
 </script>
 
-<style scoped>
-/* Scoped styles from App.vue are moved here */
-#app-container {
-  padding: 1.5rem;
-  border-radius: 15px;
-  position: relative;
-  width: 100%;
-  max-width: 400px;
-  box-sizing: border-box;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  border: 2px solid transparent;
-  transition: all 0.5s ease-in-out;
-}
-
-#app-container[style*='--dynamic-border-color'] {
-  border: 2px solid var(--dynamic-border-color);
-  transition: box-shadow 0.1s ease-out;
-}
-
-@keyframes fire-flicker {
-  0%   { box-shadow: 0 0 10px 4px rgba(var(--dynamic-border-rgb), 0.5), inset 0 0 5px 2px rgba(var(--dynamic-border-rgb), 0.3); }
-  20%  { box-shadow: 0 0 25px 10px rgba(var(--dynamic-border-rgb), 0.8), inset 0 0 10px 4px rgba(var(--dynamic-border-rgb), 0.5); }
-  40%  { box-shadow: 0 0 15px 6px rgba(var(--dynamic-border-rgb), 0.6), inset 0 0 7px 3px rgba(var(--dynamic-border-rgb), 0.4); }
-  60%  { box-shadow: 0 0 30px 12px rgba(var(--dynamic-border-rgb), 0.9), inset 0 0 12px 6px rgba(var(--dynamic-border-rgb), 0.6); }
-  80%  { box-shadow: 0 0 12px 5px rgba(var(--dynamic-border-rgb), 0.7), inset 0 0 6px 2px rgba(var(--dynamic-border-rgb), 0.5); }
-  100% { box-shadow: 0 0 10px 4px rgba(var(--dynamic-border-rgb), 0.5), inset 0 0 5px 2px rgba(var(--dynamic-border-rgb), 0.3); }
-}
-
-#app-container.warming-up {
-  animation: fire-flicker 0.8s infinite linear;
-}
-
-.station-selector-wrapper {
-  margin-bottom: 1.5rem;
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.theme-switch-wrapper {
-  position: fixed;
-  top: 15px;
-  right: 15px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  z-index: 10;
-}
-
-.status-indicator-wrapper-top-left {
-  position: fixed;
-  top: 22px;
-  left: 22px;
-  display: flex;
-  align-items: center;
-  z-index: 10;
-}
-
-.buffer-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
-}
-
-.buffer-indicator.ok {
-  background-color: #4caf50; /* Green */
-}
-
-.buffer-indicator.stalling,
-.buffer-indicator.fatal {
-  background-color: #f44336; /* Red */
-  animation: pulse-red 1.5s infinite;
-}
-
-.buffer-indicator.waiting {
-  background-color: #ffc107; /* Amber/Yellow */
-  animation: pulse-yellow 1.5s infinite;
-}
-
-@keyframes pulse-red {
-  0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
-  70% { box-shadow: 0 0 0 8px rgba(244, 67, 54, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
-}
-
-@keyframes pulse-yellow {
-  0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
-  70% { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
-}
-</style>

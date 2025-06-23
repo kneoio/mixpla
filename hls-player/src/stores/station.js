@@ -15,6 +15,7 @@ const lightenColor = (hex, percent) => {
 
 export const useStationStore = defineStore('station', {
   state: () => ({
+    animationIntensity: 0,
     stations: [], // Will be fetched from API
     radioName: storageService.getLastStation() || null, // Load last station or default, will be set after fetch
     stationInfo: null,
@@ -29,6 +30,7 @@ export const useStationStore = defineStore('station', {
     isAsleep: false, // new state to indicate if station is asleep
     isWaitingForCurator: false, // new state for when station is online but idle
     isWarmingUp: false,
+    isBroadcasting: false,
     bufferStatus: 'ok', // ok, stalling, fatal,
     djName: null,
     djStatus: null,
@@ -101,13 +103,16 @@ export const useStationStore = defineStore('station', {
         this.djStatus = data.djStatus;
         this.isWarmingUp = false; // Stop warming up on successful fetch
 
-        if (data.status === 'ONLINE' && data.currentSong === 'Waiting for curator to start the broadcast...') {
+        if (data.currentStatus === 'ON_LINE' && data.currentSong === 'Waiting for curator to start the broadcast...') {
           this.isWaitingForCurator = true;
           this.statusText = 'Station is online, waiting for curator...';
           this.isAsleep = false;
+          this.isBroadcasting = false;
         } else {
           this.isWaitingForCurator = false;
           this.isAsleep = false;
+          this.isBroadcasting = data.currentStatus === 'ON_LINE';
+          this.nowPlaying = data.currentSong || 'N/A';
           // Construct the status text from other data if not waiting
           let displayMessageParts = [];
           if (data.managedBy) displayMessageParts.push(`Mode: ${data.managedBy}`);
@@ -129,6 +134,7 @@ export const useStationStore = defineStore('station', {
                 console.log('[Debug] Station identified as asleep.');
                 this.isWarmingUp = false;
                 this.isAsleep = true;
+                this.isBroadcasting = false;
                 this.statusText = 'Station is asleep. Click to wake it up.';
                 this.stationName = this.radioName;
                 this.stopPolling();
@@ -139,6 +145,7 @@ export const useStationStore = defineStore('station', {
         this.isWarmingUp = false;
         this.isAsleep = false;
         this.isWaitingForCurator = false;
+        this.isBroadcasting = false;
         this.statusText = `Error: Could not fetch station status.`;
       }
     },
