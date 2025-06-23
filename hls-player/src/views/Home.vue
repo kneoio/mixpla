@@ -5,35 +5,19 @@
         <n-button
           v-for="station in mainStations"
           :key="station.name"
-          :type="stationStore.radioName === station.name ? 'primary' : 'default'"
-          @click="stationStore.setStation(station.name)"
+          :type="getButtonType(station)"
+          @click="handleStationClick(station)"
           :style="getStationStyle(station)"
+          :disabled="getButtonDisabled(station)"
         >
           {{ formatStationName(station.name) }}
         </n-button>
       </n-button-group>
-      <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="stationStore.setStation">
+      <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="handleDropdownSelect">
         <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
       </n-dropdown>
-
-      <!-- Auth Button -->
-      <n-button
-        v-if="!authStore.isAuthenticated"
-        @click="authStore.login()"
-        :disabled="authStore.isLoading"
-        type="default"
-      >
-        Login
-      </n-button>
-      <n-button
-        v-if="authStore.isAuthenticated"
-        @click="authStore.logout()"
-        :disabled="authStore.isLoading"
-        type="warning"
-      >
-        Logout ({{ authStore.user?.preferred_username }})
-      </n-button>
     </div>
+
     <div class="status-indicator-wrapper-top-left">
       <div :class="['buffer-indicator', indicatorClass]"></div>
     </div>
@@ -88,18 +72,22 @@ const getStationStyle = (station) => {
 };
 
 const formatStationName = (name) => {
+  if (name === 'login') return 'Login';
+  if (name === 'logout') return authStore.isAuthenticated ? `Logout (${authStore.user?.preferred_username})` : 'Logout';
+  
   const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
   return capitalized.length > 6 ? `${capitalized.substring(0, 6)}...` : capitalized;
 };
 
 const dropdownOptions = computed(() =>
-  dropdownStations.value.map(station => ({
-    label: station.name.charAt(0).toUpperCase() + station.name.slice(1),
-    key: station.name,
-    props: {
-      style: getStationStyle(station)
-    }
-  }))
+  dropdownStations.value
+    .map(station => ({
+      label: station.type === 'auth' ? formatStationName(station.name) : station.name.charAt(0).toUpperCase() + station.name.slice(1),
+      key: station.name,
+      props: {
+        style: getStationStyle(station)
+      }
+    }))
 );
 
 const isDropdownStationActive = computed(() =>
@@ -152,10 +140,41 @@ const pulsingBorderStyle = computed(() => {
   };
 });
 
+const getButtonType = (station) => {
+  if (station.name === 'login') return 'default';
+  if (station.name === 'logout') return 'warning';
+  return stationStore.radioName === station.name ? 'primary' : 'default';
+};
+
+const getButtonDisabled = (station) => {
+  if (station.name === 'login') return authStore.isAuthenticated;
+  if (station.name === 'logout') return !authStore.isAuthenticated;
+  return authStore.isLoading;
+};
+
+const handleStationClick = (station) => {
+  if (station.name === 'login') {
+    authStore.login();
+  } else if (station.name === 'logout') {
+    authStore.logout();
+  } else {
+    stationStore.setStation(station.name);
+  }
+};
+
+const handleDropdownSelect = (key) => {
+  if (key === 'login') {
+    authStore.login();
+  } else if (key === 'logout') {
+    authStore.logout();
+  } else {
+    stationStore.setStation(key);
+  }
+};
+
 watch(() => radioName.value, (newName, oldName) => {
   if (newName && newName !== oldName) {
     console.log(`Station changed to: ${newName}`);
   }
 }, { immediate: true });
 </script>
-

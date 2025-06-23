@@ -2,12 +2,13 @@
   <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
     <n-global-style />
     <div id="nav">
-      <router-link to="/">Home</router-link> | 
-      <router-link to="/profile">Profile</router-link>
+      <!--hide for now-->
+      <!--<router-link to="/">Home</router-link> | -->
+      <!--<router-link to="/profile">Profile</router-link>-->
     </div>
     <router-view />
     <footer>
-      <p class="version-text">v.1.8</p>
+      <p class="version-text">v.1.9</p>
     </footer>
   </n-config-provider>
 </template>

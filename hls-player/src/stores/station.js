@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { storageService } from '../services/storage';
 import apiClient from '../services/api';
+import { useAuthStore } from '../stores/auth';
 
 // Helper function to lighten/darken a hex color
 const lightenColor = (hex, percent) => {
@@ -73,11 +74,32 @@ export const useStationStore = defineStore('station', {
       try {
         const response = await apiClient.get('/radio/stations');
         this.stations = response.data;
-        const stationExists = this.stations.some(s => s.name === this.radioName);
+        
+        const authStore = useAuthStore();
+        const authEntry = authStore.isAuthenticated ? 
+          {
+            name: 'logout',
+            displayName: 'Logout',
+            type: 'auth',
+            color: '#ef4444',
+            currentStatus: 'STATIC'
+          } : 
+          {
+            name: 'login',
+            displayName: 'Login',
+            type: 'auth',
+            color: '#6b7280',
+            currentStatus: 'STATIC'
+          };
+        
+        this.stations.push(authEntry);
+        
+        const stationExists = this.stations.some(s => s.name === this.radioName && s.type !== 'auth');
 
         if (!this.radioName || !stationExists) {
-          if (this.stations.length > 0) {
-            this.radioName = this.stations[0].name;
+          const realStations = this.stations.filter(s => s.type !== 'auth');
+          if (realStations.length > 0) {
+            this.radioName = realStations[0].name;
             storageService.saveLastStation(this.radioName);
           }
         }
@@ -172,7 +194,7 @@ export const useStationStore = defineStore('station', {
     },
 
     setStation(newStationName) {
-      if (this.stations.some(s => s.name === newStationName) && this.radioName !== newStationName) {
+      if (this.stations.some(s => s.name === newStationName && s.type !== 'auth') && this.radioName !== newStationName) {
         this.radioName = newStationName;
         storageService.saveLastStation(newStationName); // Save to local storage
         this.isAsleep = false; // Reset asleep status on station change
