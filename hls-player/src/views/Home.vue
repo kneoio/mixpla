@@ -2,18 +2,13 @@
   <div id="app-container" :style="[dynamicBorderStyle, pulsingBorderStyle]" :class="{ 'warming-up': isWarmingUp }">
     <div class="station-selector-wrapper">
       <n-button-group>
-        <n-button
-          v-for="station in mainStations"
-          :key="station.name"
-          :type="getButtonType(station)"
-          @click="handleStationClick(station)"
-          :style="getStationStyle(station)"
-          :disabled="getButtonDisabled(station)"
-        >
-          {{ formatStationName(station.name) }}
+        <n-button v-for=" station in mainStations " :key="station.name" :type="getButtonType( station )"
+          @click="handleStationClick( station )" :style="getStationStyle( station )" :disabled="getButtonDisabled( station )">
+          {{ formatStationName( station.name ) }}
         </n-button>
       </n-button-group>
-      <n-dropdown v-if="dropdownOptions.length" trigger="click" :options="dropdownOptions" @select="handleDropdownSelect">
+      <n-dropdown v-if=" dropdownOptions.length " trigger="click" :options="dropdownOptions"
+        @select="handleDropdownSelect">
         <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
       </n-dropdown>
     </div>
@@ -54,127 +49,179 @@ const {
   isBroadcasting,
   animationIntensity,
   stationColor
-} = storeToRefs(stationStore);
+} = storeToRefs( stationStore );
 
-onMounted(() => {
-  stationStore.fetchStations();
-});
+onMounted( async () => {
+  await stationStore.fetchStations();
 
-const mainStations = computed(() => stations.value.slice(0, 4));
-const dropdownStations = computed(() => stations.value.slice(4));
+  const urlParams = new URLSearchParams( window.location.search );
+  const radioParam = urlParams.get( 'radio' );
 
-const getStationStyle = (station) => {
+  if ( radioParam ) {
+    let targetStation = stations.value.find( station =>
+      station.name.toLowerCase() === radioParam.toLowerCase()
+    );
+
+    if ( targetStation ) {
+      stationStore.setStation( targetStation.name );
+      console.log( `Auto-selected station from URL parameter: ${targetStation.name}` );
+    } else {
+      try {
+        const response = await fetch( `${import.meta.env.VITE_API_BASE_URL || window.location.origin}/${radioParam.toLowerCase()}/radio/status` );
+
+        if ( response.ok ) {
+          const stationData = await response.json();
+
+          const apiStation = {
+            name: radioParam.toLowerCase(),
+            color: stationData.color || '#FFA500',
+            currentStatus: stationData.currentStatus || 'UNKNOWN',
+            type: 'api'
+          };
+
+          stationStore.addCustomStation( apiStation );
+          localStorage.setItem( 'customStation', JSON.stringify( apiStation ) );
+          stationStore.setStation( apiStation.name );
+          console.log( `Added and selected API station from URL parameter: ${apiStation.name}` );
+        } else {
+          throw new Error( `API returned ${response.status}` );
+        }
+      } catch ( error ) {
+        console.warn( `Station '${radioParam}' not found in API or fetched list. Available stations:`, stations.value.map( s => s.name ) );
+        console.log( `Please choose from existing stations only.` );
+      }
+    }
+  } else {
+    const customStation = localStorage.getItem( 'customStation' );
+    if ( customStation ) {
+      try {
+        const parsedStation = JSON.parse( customStation );
+        stationStore.removeCustomStation( parsedStation.name );
+        localStorage.removeItem( 'customStation' );
+        console.log( `Removed API station from storage: ${parsedStation.name}` );
+      } catch ( e ) {
+        console.warn( 'Error parsing API station from localStorage:', e );
+        localStorage.removeItem( 'customStation' );
+      }
+    }
+  }
+} );
+
+const mainStations = computed( () => stations.value.slice( 0, 4 ) );
+const dropdownStations = computed( () => stations.value.slice( 4 ) );
+
+const getStationStyle = ( station ) => {
   const activeStatuses = ['ONLINE', 'BROADCASTING', 'WAITING_FOR_CURATOR'];
-  if (activeStatuses.includes(station.currentStatus)) {
+  if ( activeStatuses.includes( station.currentStatus ) ) {
     return { color: station.color };
   }
   return {};
 };
 
-const formatStationName = (name) => {
-  if (name === 'login') return 'Login';
-  if (name === 'logout') return authStore.isAuthenticated ? `Logout (${authStore.user?.preferred_username})` : 'Logout';
-  
-  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
-  return capitalized.length > 6 ? `${capitalized.substring(0, 6)}...` : capitalized;
+const formatStationName = ( name ) => {
+  if ( name === 'login' ) return 'Login';
+  if ( name === 'logout' ) return authStore.isAuthenticated ? `Logout (${authStore.user?.preferred_username})` : 'Logout';
+
+  const capitalized = name.charAt( 0 ).toUpperCase() + name.slice( 1 );
+  return capitalized.length > 6 ? `${capitalized.substring( 0, 6 )}...` : capitalized;
 };
 
-const dropdownOptions = computed(() =>
+const dropdownOptions = computed( () =>
   dropdownStations.value
-    .map(station => ({
-      label: station.type === 'auth' ? formatStationName(station.name) : station.name.charAt(0).toUpperCase() + station.name.slice(1),
+    .map( station => ( {
+      label: station.type === 'auth' ? formatStationName( station.name ) : station.name.charAt( 0 ).toUpperCase() + station.name.slice( 1 ),
       key: station.name,
       props: {
-        style: getStationStyle(station)
+        style: getStationStyle( station )
       }
-    }))
+    } ) )
 );
 
-const isDropdownStationActive = computed(() =>
-  dropdownStations.value.some(s => s.name === radioName.value)
+const isDropdownStationActive = computed( () =>
+  dropdownStations.value.some( s => s.name === radioName.value )
 );
 
-const indicatorClass = computed(() => {
-  if (isAsleep.value) return 'waiting';
-  if (isWaitingForCurator.value) return 'waiting';
-  if (isWarmingUp.value) return 'waiting';
+const indicatorClass = computed( () => {
+  if ( isAsleep.value ) return 'waiting';
+  if ( isWaitingForCurator.value ) return 'waiting';
+  if ( isWarmingUp.value ) return 'waiting';
   return bufferStatus.value;
-});
+} );
 
-const dynamicBorderStyle = computed(() => {
-  if (isWarmingUp.value) {
+const dynamicBorderStyle = computed( () => {
+  if ( isWarmingUp.value ) {
     return {
       '--dynamic-border-rgb': '128, 128, 128',
     };
   }
   return storeDynamicBorderStyle.value;
-});
+} );
 
-const pulsingBorderStyle = computed(() => {
-  if (!isBroadcasting.value) return {};
+const pulsingBorderStyle = computed( () => {
+  if ( !isBroadcasting.value ) return {};
 
   const intensity = animationIntensity.value;
   const color = stationColor.value || '#FFA500';
 
   let r = 0, g = 0, b = 0;
-  if (color.startsWith('#') && color.length === 7) {
-    r = parseInt(color.substring(1, 3), 16);
-    g = parseInt(color.substring(3, 5), 16);
-    b = parseInt(color.substring(5, 7), 16);
-  } else if (color.startsWith('#') && color.length === 4) {
-    const rHex = color.substring(1, 2);
-    const gHex = color.substring(2, 3);
-    const bHex = color.substring(3, 4);
-    r = parseInt(rHex + rHex, 16);
-    g = parseInt(gHex + gHex, 16);
-    b = parseInt(bHex + bHex, 16);
+  if ( color.startsWith( '#' ) && color.length === 7 ) {
+    r = parseInt( color.substring( 1, 3 ), 16 );
+    g = parseInt( color.substring( 3, 5 ), 16 );
+    b = parseInt( color.substring( 5, 7 ), 16 );
+  } else if ( color.startsWith( '#' ) && color.length === 4 ) {
+    const rHex = color.substring( 1, 2 );
+    const gHex = color.substring( 2, 3 );
+    const bHex = color.substring( 3, 4 );
+    r = parseInt( rHex + rHex, 16 );
+    g = parseInt( gHex + gHex, 16 );
+    b = parseInt( bHex + bHex, 16 );
   }
 
-  const spread = 5 + (intensity * 20);
-  const blur = 10 + (intensity * 15);
-  const alpha = 0.4 + (intensity * 0.4);
+  const spread = 5 + ( intensity * 20 );
+  const blur = 10 + ( intensity * 15 );
+  const alpha = 0.4 + ( intensity * 0.4 );
 
   return {
     boxShadow: `0 0 ${blur}px ${spread}px rgba(${r}, ${g}, ${b}, ${alpha})`,
     transition: 'box-shadow 0.05s linear'
   };
-});
+} );
 
-const getButtonType = (station) => {
-  if (station.name === 'login') return 'default';
-  if (station.name === 'logout') return 'warning';
+const getButtonType = ( station ) => {
+  if ( station.name === 'login' ) return 'default';
+  if ( station.name === 'logout' ) return 'warning';
   return stationStore.radioName === station.name ? 'primary' : 'default';
 };
 
-const getButtonDisabled = (station) => {
-  if (station.name === 'login') return authStore.isAuthenticated;
-  if (station.name === 'logout') return !authStore.isAuthenticated;
+const getButtonDisabled = ( station ) => {
+  if ( station.name === 'login' ) return authStore.isAuthenticated;
+  if ( station.name === 'logout' ) return !authStore.isAuthenticated;
   return authStore.isLoading;
 };
 
-const handleStationClick = (station) => {
-  if (station.name === 'login') {
+const handleStationClick = ( station ) => {
+  if ( station.name === 'login' ) {
     authStore.login();
-  } else if (station.name === 'logout') {
+  } else if ( station.name === 'logout' ) {
     authStore.logout();
   } else {
-    stationStore.setStation(station.name);
+    stationStore.setStation( station.name );
   }
 };
 
-const handleDropdownSelect = (key) => {
-  if (key === 'login') {
+const handleDropdownSelect = ( key ) => {
+  if ( key === 'login' ) {
     authStore.login();
-  } else if (key === 'logout') {
+  } else if ( key === 'logout' ) {
     authStore.logout();
   } else {
-    stationStore.setStation(key);
+    stationStore.setStation( key );
   }
 };
 
-watch(() => radioName.value, (newName, oldName) => {
-  if (newName && newName !== oldName) {
-    console.log(`Station changed to: ${newName}`);
+watch( () => radioName.value, ( newName, oldName ) => {
+  if ( newName && newName !== oldName ) {
+    console.log( `Station changed to: ${newName}` );
   }
-}, { immediate: true });
+}, { immediate: true } );
 </script>

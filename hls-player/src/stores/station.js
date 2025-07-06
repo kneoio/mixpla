@@ -206,6 +206,33 @@ export const useStationStore = defineStore('station', {
       }
     },
 
+    addCustomStation(station) {
+      // Check if station already exists
+      const existingStation = this.stations.find(s => s.name === station.name);
+      if (!existingStation) {
+        this.stations.push(station);
+        console.log(`Added custom station: ${station.name}`);
+      }
+    },
+
+    removeCustomStation(stationName) {
+      const index = this.stations.findIndex(s => s.name === stationName && s.type === 'custom');
+      if (index !== -1) {
+        this.stations.splice(index, 1);
+        console.log(`Removed custom station: ${stationName}`);
+        
+        // If we're currently on this station, switch to the first available station
+        if (this.radioName === stationName) {
+          const realStations = this.stations.filter(s => s.type !== 'auth' && s.type !== 'custom');
+          if (realStations.length > 0) {
+            this.radioName = realStations[0].name;
+            storageService.saveLastStation(this.radioName);
+            this.startPolling();
+          }
+        }
+      }
+    },
+
     startPolling(fast = false) {
       this.stopPolling(); // Ensure no multiple intervals are running
       this.fetchStationInfo(); // Fetch immediately on start

@@ -49,7 +49,7 @@ export const useRadioStatusStore = defineStore('radioStatus', {
       this.error = null;
 
       try {
-                const response = await apiClient.get(`/${radioName}${STATUS_PATH_SUFFIX}`);
+        const response = await apiClient.get(`/${radioName}${STATUS_PATH_SUFFIX}`);
         this.statusData = response.data;
         this.stationName = response.data.name || 'Unknown Radio';
       } catch (err) {
@@ -62,15 +62,12 @@ export const useRadioStatusStore = defineStore('radioStatus', {
     },
 
     startPolling(radioName) {
-      // Clear any existing polling interval
       if (this.pollingInterval) {
         clearInterval(this.pollingInterval);
       }
 
       if (radioName) {
-        // Fetch immediately
         this.fetchStatus(radioName);
-        // Then set up the interval
         this.pollingInterval = setInterval(() => {
           this.fetchStatus(radioName);
         }, STATUS_REFRESH_INTERVAL);
