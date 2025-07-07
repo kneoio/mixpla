@@ -199,12 +199,20 @@ export const useStationStore = defineStore('station', {
     setStation(newStationName) {
       if (this.stations.some(s => s.name === newStationName && s.type !== 'auth') && this.radioName !== newStationName) {
         this.radioName = newStationName;
-        storageService.saveLastStation(newStationName); // Save to local storage
-        this.isAsleep = false; // Reset asleep status on station change
-        this.isWaitingForCurator = false; // Reset waiting status on station change
+        storageService.saveLastStation(newStationName);
+        
+        // Immediately update UI to show new station name and neutral state
+        this.stationName = newStationName.charAt(0).toUpperCase() + newStationName.slice(1);
+        this.stationColor = null; // Reset to neutral color
+        this.isAsleep = false;
+        this.isWaitingForCurator = false;
+        this.isWarmingUp = true; // Set to warming up state for gray color
+        this.isBroadcasting = false;
         this.djName = null;
         this.djStatus = null;
-        // When station changes, we want to immediately fetch the new info
+        this.statusText = 'Loading station information...';
+        
+        // Then fetch the actual station info
         this.startPolling();
       }
     },
