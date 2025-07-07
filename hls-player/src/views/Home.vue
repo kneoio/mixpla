@@ -52,25 +52,54 @@ const {
 } = storeToRefs( stationStore );
 
 onMounted( async () => {
-  await stationStore.fetchStations();
-
+  console.log('🔍 [DEBUG] Home component mounted');
+  
   const urlParams = new URLSearchParams( window.location.search );
   const radioParam = urlParams.get( 'radio' );
+  
+  console.log('🔍 [DEBUG] URL search params:', window.location.search);
+  console.log('🔍 [DEBUG] Radio parameter extracted:', radioParam);
+  console.log('🔍 [DEBUG] Current localStorage lastStation:', localStorage.getItem('lastStation'));
+  console.log('🔍 [DEBUG] Current stationStore.radioName:', stationStore.radioName);
 
+  // If URL parameter exists, we need to handle it specially
   if ( radioParam ) {
+    console.log('🔍 [DEBUG] URL parameter detected, handling specially');
+    
+    // Clear localStorage to prevent fallback to saved station
+    const previousStation = localStorage.getItem('lastStation');
+    console.log('🔍 [DEBUG] Previous station in localStorage:', previousStation);
+    localStorage.removeItem('lastStation');
+    console.log('🔍 [DEBUG] Cleared lastStation from localStorage');
+    
+    console.log('🔍 [DEBUG] About to fetch stations (with skipAutoSelect=true)...');
+    // Clear the current station first to prevent any auto-selection
+    stationStore.radioName = null;
+    await stationStore.fetchStations(true);
+    console.log('🔍 [DEBUG] Stations fetched:', stations.value.map(s => s.name));
+    console.log('🔍 [DEBUG] stationStore.radioName after fetchStations:', stationStore.radioName);
+    
     let targetStation = stations.value.find( station =>
       station.name.toLowerCase() === radioParam.toLowerCase()
     );
+    console.log('🔍 [DEBUG] Target station found:', targetStation);
 
     if ( targetStation ) {
+      console.log('🔍 [DEBUG] Setting station to:', targetStation.name);
       stationStore.setStation( targetStation.name );
-      console.log( `Auto-selected station from URL parameter: ${targetStation.name}` );
+      console.log('🔍 [DEBUG] Station set, new radioName:', stationStore.radioName);
+      console.log( `✅ Auto-selected station from URL parameter: ${targetStation.name}` );
     } else {
+      console.log('🔍 [DEBUG] Station not found in list, trying API...');
       try {
-        const response = await fetch( `${import.meta.env.VITE_API_BASE_URL || window.location.origin}/${radioParam.toLowerCase()}/radio/status` );
+        const apiUrl = `${import.meta.env.VITE_API_BASE_URL || window.location.origin}/${radioParam.toLowerCase()}/radio/status`;
+        console.log('🔍 [DEBUG] API URL:', apiUrl);
+        const response = await fetch( apiUrl );
+        console.log('🔍 [DEBUG] API response status:', response.status);
 
         if ( response.ok ) {
           const stationData = await response.json();
+          console.log('🔍 [DEBUG] API station data:', stationData);
 
           const apiStation = {
             name: radioParam.toLowerCase(),
@@ -79,32 +108,72 @@ onMounted( async () => {
             type: 'api'
           };
 
+          console.log('🔍 [DEBUG] Adding custom station:', apiStation);
           stationStore.addCustomStation( apiStation );
           localStorage.setItem( 'customStation', JSON.stringify( apiStation ) );
           stationStore.setStation( apiStation.name );
-          console.log( `Added and selected API station from URL parameter: ${apiStation.name}` );
+          console.log('🔍 [DEBUG] Station set to API station, new radioName:', stationStore.radioName);
+          console.log( `✅ Added and selected API station from URL parameter: ${apiStation.name}` );
         } else {
           throw new Error( `API returned ${response.status}` );
         }
       } catch ( error ) {
+        console.log('🔍 [DEBUG] API call failed:', error);
         console.warn( `Station '${radioParam}' not found in API or fetched list. Available stations:`, stations.value.map( s => s.name ) );
         console.log( `Please choose from existing stations only.` );
+        
+        // Instead of auto-selecting, show error state with the requested station name
+        console.log('🔍 [DEBUG] Setting error state for non-existent station:', radioParam);
+        stationStore.radioName = radioParam.toLowerCase();
+        stationStore.stationName = radioParam.toLowerCase();
+        stationStore.statusText = `Station '${radioParam}' not found. Available stations: ${stations.value.filter(s => s.type !== 'auth').map(s => s.name).join(', ')}`;
+        stationStore.isAsleep = false;
+        stationStore.isWaitingForCurator = false;
+        stationStore.isWarmingUp = false;
+        stationStore.isBroadcasting = false;
+        stationStore.stationColor = '#ef4444'; // Red color for error
+        console.log('🔍 [DEBUG] Error state set, radioName:', stationStore.radioName);
+        console.log(`❌ Station '${radioParam}' not found - showing error state`);
       }
     }
-  } else {
+    
+    // Clean up custom station from localStorage if no URL parameter
     const customStation = localStorage.getItem( 'customStation' );
     if ( customStation ) {
+      console.log('🔍 [DEBUG] Found custom station in localStorage, removing:', customStation);
       try {
         const parsedStation = JSON.parse( customStation );
         stationStore.removeCustomStation( parsedStation.name );
         localStorage.removeItem( 'customStation' );
-        console.log( `Removed API station from storage: ${parsedStation.name}` );
+        console.log( `🧹 Removed API station from storage: ${parsedStation.name}` );
+      } catch ( e ) {
+        console.warn( 'Error parsing API station from localStorage:', e );
+        localStorage.removeItem( 'customStation' );
+      }
+    }
+  } else {
+    console.log('🔍 [DEBUG] No URL parameter, using normal behavior');
+    // Normal behavior - use localStorage
+    await stationStore.fetchStations(false);
+    console.log('🔍 [DEBUG] Stations fetched (normal flow):', stations.value.map(s => s.name));
+    console.log('🔍 [DEBUG] stationStore.radioName after fetchStations (normal flow):', stationStore.radioName);
+    
+    const customStation = localStorage.getItem( 'customStation' );
+    if ( customStation ) {
+      console.log('🔍 [DEBUG] Found custom station in localStorage (normal flow), removing:', customStation);
+      try {
+        const parsedStation = JSON.parse( customStation );
+        stationStore.removeCustomStation( parsedStation.name );
+        localStorage.removeItem( 'customStation' );
+        console.log( `🧹 Removed API station from storage: ${parsedStation.name}` );
       } catch ( e ) {
         console.warn( 'Error parsing API station from localStorage:', e );
         localStorage.removeItem( 'customStation' );
       }
     }
   }
+  
+  console.log('🔍 [DEBUG] Final stationStore.radioName:', stationStore.radioName);
 } );
 
 const mainStations = computed( () => stations.value.slice( 0, 4 ) );

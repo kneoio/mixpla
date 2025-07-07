@@ -70,7 +70,7 @@ export const useStationStore = defineStore('station', {
       }
     },
 
-    async fetchStations() {
+    async fetchStations(skipAutoSelect = false) {
       try {
         const response = await apiClient.get('/radio/stations');
         this.stations = response.data;
@@ -94,18 +94,21 @@ export const useStationStore = defineStore('station', {
         
         this.stations.push(authEntry);
         
-        const stationExists = this.stations.some(s => s.name === this.radioName && s.type !== 'auth');
+        // Only auto-select station if not skipping and no valid current station
+        if (!skipAutoSelect) {
+          const stationExists = this.stations.some(s => s.name === this.radioName && s.type !== 'auth');
 
-        if (!this.radioName || !stationExists) {
-          const realStations = this.stations.filter(s => s.type !== 'auth');
-          if (realStations.length > 0) {
-            this.radioName = realStations[0].name;
-            storageService.saveLastStation(this.radioName);
+          if (!this.radioName || !stationExists) {
+            const realStations = this.stations.filter(s => s.type !== 'auth');
+            if (realStations.length > 0) {
+              this.radioName = realStations[0].name;
+              storageService.saveLastStation(this.radioName);
+            }
           }
+          // Always start polling after fetching stations, it will use the correct radioName
+          this.startPolling(); // Start polling for the selected station
+          this.startListPolling(); // Start polling for the whole list
         }
-        // Always start polling after fetching stations, it will use the correct radioName
-        this.startPolling(); // Start polling for the selected station
-        this.startListPolling(); // Start polling for the whole list
 
       } catch (error) {
         console.error('Error fetching stations:', error);
