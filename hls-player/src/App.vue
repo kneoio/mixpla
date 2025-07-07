@@ -8,7 +8,7 @@
     </div>
     <router-view />
     <footer>
-      <p class="version-text">v.2.3</p>
+      <p class="version-text">v.2.4</p>
     </footer>
   </n-config-provider>
 </template>

@@ -17,22 +17,22 @@ const lightenColor = (hex, percent) => {
 export const useStationStore = defineStore('station', {
   state: () => ({
     animationIntensity: 0,
-    stations: [], // Will be fetched from API
-    radioName: storageService.getLastStation() || null, // Load last station or default, will be set after fetch
+    stations: [], 
+    radioName: storageService.getLastStation() || null, 
     stationInfo: null,
     nowPlaying: 'N/A',
     statusPollingInterval: null,
     listPollingInterval: null,
-    bufferStatus: 'healthy', // 'healthy', 'buffering', 'stalled', 'fatal'
-    animationIntensity: 0, // 0 to 1 for animation intensity
+    bufferStatus: 'healthy', 
+    animationIntensity: 0, 
     stationColor: null,
     statusText: 'Loading stations...',
     stationName: 'Radio',
-    isAsleep: false, // new state to indicate if station is asleep
-    isWaitingForCurator: false, // new state for when station is online but idle
+    isAsleep: false, 
+    isWaitingForCurator: false, 
     isWarmingUp: false,
     isBroadcasting: false,
-    bufferStatus: 'ok', // ok, stalling, fatal,
+    bufferStatus: 'ok', 
     djName: null,
     djStatus: null,
   }),
@@ -134,7 +134,10 @@ export const useStationStore = defineStore('station', {
           this.isWaitingForCurator = false;
           this.isAsleep = false;
           this.isBroadcasting = data.currentStatus === 'ON_LINE';
-          this.nowPlaying = data.currentSong || 'N/A';
+          // Only update nowPlaying if there's a current song, otherwise keep the previous value
+          if (data.currentSong && data.currentSong.trim() !== '') {
+            this.nowPlaying = data.currentSong;
+          }
           // Construct the status text from other data if not waiting
           let displayMessageParts = [];
           if (data.managedBy) displayMessageParts.push(`Mode: ${data.managedBy}`);
