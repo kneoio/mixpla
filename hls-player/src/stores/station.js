@@ -111,8 +111,73 @@ export const useStationStore = defineStore('station', {
         }
 
       } catch (error) {
-        console.error('Error fetching stations:', error);
-        this.statusText = 'Could not load station list.';
+        console.error('Failed to get stations list:', error);
+        
+        // Check if error is due to null user and silently logout
+        if (error.response?.data?.message && 
+            error.response.data.message.includes('"user" is null')) {
+          console.log('User is null, silently logging out...');
+          
+          // Immediately clear UI state to prevent broken display
+          this.stations = [];
+          this.radioName = null;
+          this.stationInfo = null;
+          this.nowPlaying = 'N/A';
+          this.statusText = 'Redirecting...';
+          this.isAsleep = false;
+          this.isWaitingForCurator = false;
+          this.isWarmingUp = false;
+          this.isBroadcasting = false;
+          
+          // Clear polling intervals
+          if (this.statusPollingInterval) {
+            clearInterval(this.statusPollingInterval);
+            this.statusPollingInterval = null;
+          }
+          if (this.listPollingInterval) {
+            clearInterval(this.listPollingInterval);
+            this.listPollingInterval = null;
+          }
+          
+          const authStore = useAuthStore();
+          authStore.logout();
+          return;
+        }
+        
+        // If we have a current station playing, show it as a fallback
+        if (this.radioName) {
+          console.log('Creating fallback station entry for currently playing:', this.radioName);
+          this.stations = [{
+            name: this.radioName,
+            displayName: this.stationName || this.radioName,
+            color: this.stationColor || '#6b7280',
+            currentStatus: this.isBroadcasting ? 'ON_LINE' : 'OFFLINE',
+            type: 'station'
+          }];
+          
+          // Add auth entry
+          const authStore = useAuthStore();
+          const authEntry = authStore.isAuthenticated ? 
+            {
+              name: 'logout',
+              displayName: 'Logout',
+              type: 'auth',
+              color: '#ef4444',
+              currentStatus: 'STATIC'
+            } : 
+            {
+              name: 'login',
+              displayName: 'Login',
+              type: 'auth',
+              color: '#6b7280',
+              currentStatus: 'STATIC'
+            };
+          
+          this.stations.push(authEntry);
+          this.statusText = 'Limited station list (connection issue).';
+        } else {
+          this.statusText = 'Could not load station list.';
+        }
       }
     },
 
