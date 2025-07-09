@@ -38,6 +38,7 @@ const uiStore = useUiStore();
 const stationStore = useStationStore();
 const authStore = useAuthStore();
 
+
 const {
   stations,
   radioName,
@@ -273,7 +274,7 @@ const getButtonType = ( station ) => {
 const getButtonDisabled = ( station ) => {
   if ( station.name === 'login' ) return authStore.isAuthenticated;
   if ( station.name === 'logout' ) return !authStore.isAuthenticated;
-  return authStore.isLoading;
+  return false;
 };
 
 const handleStationClick = ( station ) => {

@@ -14,7 +14,7 @@ const store = useRadioStatusStore();
 
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search);
-  const radioName = urlParams.get(PARAMETER_NAME) || 'bratan'; // Default to 'bratan' if not specified
+  const radioName = urlParams.get(PARAMETER_NAME) || 'aizoo';
   store.startPolling(radioName);
 });
 

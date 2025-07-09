@@ -81,3 +81,29 @@
   background-color: #ffc107; /* Amber/Yellow */
   animation: pulse-yellow 1.5s infinite;
 }
+
+/* Adjust main container to remove extra spacing */
+#app-container {
+  margin-bottom: 0;
+}
+
+/* Modal styles */
+.n-card {
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+.n-card__content {
+  padding: 20px 0;
+}
+
+.n-card__footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--n-divider-color);
+}
+
+/* Dark mode support */
+html.dark .n-card {
+  background-color: var(--n-color);
+  border: 1px solid var(--n-border-color);
+}

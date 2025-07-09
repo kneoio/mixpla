@@ -61,38 +61,46 @@ export const useStationStore = defineStore('station', {
         this.bufferStatus = status;
       }
     },
-    async updateStationsList() {
-      try {
-        const response = await publicApiClient.get('/radio/stations');
-        this.stations = response.data;
-      } catch (error) {
-        console.error('Error updating stations list:', error);
-      }
+    
+    // Update the auth entry based on current auth state
+    updateAuthEntry() {
+      const authStore = useAuthStore();
+      
+      // Remove any existing auth entry
+      this.stations = this.stations.filter(s => s.type !== 'auth');
+      
+      // Add the appropriate auth entry
+      const authEntry = authStore.isAuthenticated ? 
+        {
+          name: 'logout',
+          displayName: 'Logout',
+          type: 'auth',
+          color: '#ef4444',
+          currentStatus: 'STATIC'
+        } : 
+        {
+          name: 'login',
+          displayName: 'Login',
+          type: 'auth',
+          color: '#6b7280',
+          currentStatus: 'STATIC'
+        };
+      
+      this.stations.push(authEntry);
     },
-
+    
+    // Handle auth state changes
+    onAuthStateChanged() {
+      this.updateAuthEntry();
+    },
+    
     async fetchStations(skipAutoSelect = false) {
       try {
         const response = await publicApiClient.get('/radio/stations');
         this.stations = response.data;
         
-        const authStore = useAuthStore();
-        const authEntry = authStore.isAuthenticated ? 
-          {
-            name: 'logout',
-            displayName: 'Logout',
-            type: 'auth',
-            color: '#ef4444',
-            currentStatus: 'STATIC'
-          } : 
-          {
-            name: 'login',
-            displayName: 'Login',
-            type: 'auth',
-            color: '#6b7280',
-            currentStatus: 'STATIC'
-          };
-        
-        this.stations.push(authEntry);
+        // Always update the auth entry when fetching stations
+        this.updateAuthEntry();
         
         // Only auto-select station if not skipping and no valid current station
         if (!skipAutoSelect) {
@@ -293,19 +301,12 @@ export const useStationStore = defineStore('station', {
     },
 
     removeCustomStation(stationName) {
-      const index = this.stations.findIndex(s => s.name === stationName && s.type === 'custom');
-      if (index !== -1) {
-        this.stations.splice(index, 1);
-        console.log(`Removed custom station: ${stationName}`);
-        
-        if (this.radioName === stationName) {
-          const realStations = this.stations.filter(s => s.type !== 'auth' && s.type !== 'custom');
-          if (realStations.length > 0) {
-            this.radioName = realStations[0].name;
-            storageService.saveLastStation(this.radioName);
-            this.startPolling();
-          }
-        }
+      this.stations = this.stations.filter(s => s.name !== stationName);
+      storageService.removeCustomStation(stationName);
+      
+      // If the current station was removed, select the first available station
+      if (this.radioName === stationName) {
+        this.setStation(this.stations[0]?.name || null);
       }
     },
 

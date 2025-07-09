@@ -10,6 +10,16 @@ export const useAuthStore = defineStore('auth', () => {
   function login() {
     keycloak.login();
   }
+  
+  function notifyAuthStateChanged() {
+    // Import here to avoid circular dependency
+    import('./station').then(({ useStationStore }) => {
+      const stationStore = useStationStore();
+      if (stationStore?.onAuthStateChanged) {
+        stationStore.onAuthStateChanged();
+      }
+    }).catch(console.error);
+  }
 
   function logout() {
     // Redirect to the home page after logout
@@ -32,6 +42,9 @@ export const useAuthStore = defineStore('auth', () => {
       } else {
         console.log('Not authenticated');
       }
+      
+      // Notify station store about auth state change
+      this.notifyAuthStateChanged();
     } catch (error) {
       console.error('Failed to initialize Keycloak:', error);
     } finally {
@@ -46,6 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     init,
-    keycloakInstance: keycloak
+    keycloakInstance: keycloak,
+    notifyAuthStateChanged
   };
 });

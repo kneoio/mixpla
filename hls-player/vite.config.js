@@ -28,22 +28,22 @@ export default defineConfig(({ mode }) => {
           theme_color: '#ffffff',
           icons: [
             {
-              src: 'pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png',
+              src: 'favicon.ico',
+              sizes: '64x64',
+              type: 'image/x-icon',
               purpose: 'any'
             },
             {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
+              src: 'apple-touch-icon.png',
+              sizes: '180x180',
               type: 'image/png',
-              purpose: 'any'
+              purpose: 'any maskable'
             },
             {
-              src: 'maskable_icon_x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable'
+              src: 'vite.svg',
+              sizes: '48x48 72x72 96x96 128x128 256x256',
+              type: 'image/svg+xml',
+              purpose: 'any'
             }
           ],
         },
