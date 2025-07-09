@@ -1,8 +1,13 @@
 import axios from 'axios';
 import keycloak from './keycloak';
+import { MIXPLA_APP_HEADER } from '../config/version';
 
+// Authenticated API client for protected endpoints
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
+  headers: {
+    'X-Mixpla-App': MIXPLA_APP_HEADER
+  }
 });
 
 apiClient.interceptors.request.use(async (config) => {
@@ -22,4 +27,14 @@ apiClient.interceptors.request.use(async (config) => {
   return Promise.reject(error);
 });
 
+// Public API client for endpoints that don't require authentication
+const publicApiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  headers: {
+    'X-Mixpla-App': MIXPLA_APP_HEADER
+  }
+});
+
+// Export both clients
 export default apiClient;
+export { publicApiClient };

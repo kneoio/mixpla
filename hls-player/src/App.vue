@@ -8,7 +8,7 @@
     </div>
     <router-view />
     <footer>
-      <p class="version-text">v.2.4.2</p>
+      <p class="version-text">v.{{ VERSION }}</p>
     </footer>
   </n-config-provider>
 </template>
@@ -17,6 +17,7 @@
 import { computed, watch } from 'vue';
 import { NConfigProvider, NGlobalStyle, darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
+import { VERSION } from './config/version';
 
 const uiStore = useUiStore();
 

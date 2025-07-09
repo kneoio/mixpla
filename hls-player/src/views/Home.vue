@@ -72,17 +72,25 @@ onMounted( async () => {
     localStorage.removeItem('lastStation');
     console.log('🔍 [DEBUG] Cleared lastStation from localStorage');
     
+    // Set the station immediately from URL parameter - don't wait for stations list
+    console.log('🔍 [DEBUG] Setting station directly from URL parameter:', radioParam);
+    stationStore.radioName = radioParam.toLowerCase();
+    stationStore.stationName = radioParam.toLowerCase();
+    console.log('🔍 [DEBUG] Station set directly, radioName:', stationStore.radioName);
+    
+    // Start polling immediately for this station
+    stationStore.startPolling();
+    console.log('🔍 [DEBUG] Started polling for URL parameter station');
+    
+    // Try to fetch stations list, but don't depend on it
     console.log('🔍 [DEBUG] About to fetch stations (with skipAutoSelect=true)...');
-    // Clear the current station first to prevent any auto-selection
-    stationStore.radioName = null;
-    await stationStore.fetchStations(true);
-    console.log('🔍 [DEBUG] Stations fetched:', stations.value.map(s => s.name));
-    console.log('🔍 [DEBUG] stationStore.radioName after fetchStations:', stationStore.radioName);
+    await stationStore.fetchStations(true); // Skip auto-selection
+    console.log('🔍 [DEBUG] Stations fetched (URL param flow):', stations.value.map(s => s.name));
     
     let targetStation = stations.value.find( station =>
       station.name.toLowerCase() === radioParam.toLowerCase()
     );
-    console.log('🔍 [DEBUG] Target station found:', targetStation);
+    console.log('🔍 [DEBUG] Target station found in list:', targetStation);
 
     if ( targetStation ) {
       console.log('🔍 [DEBUG] Setting station to:', targetStation.name);

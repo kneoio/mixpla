@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { storageService } from '../services/storage';
-import apiClient from '../services/api';
+import apiClient, { publicApiClient } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 
 // Helper function to lighten/darken a hex color
@@ -63,7 +63,7 @@ export const useStationStore = defineStore('station', {
     },
     async updateStationsList() {
       try {
-        const response = await apiClient.get('/radio/stations');
+        const response = await publicApiClient.get('/radio/stations');
         this.stations = response.data;
       } catch (error) {
         console.error('Error updating stations list:', error);
@@ -72,7 +72,7 @@ export const useStationStore = defineStore('station', {
 
     async fetchStations(skipAutoSelect = false) {
       try {
-        const response = await apiClient.get('/radio/stations');
+        const response = await publicApiClient.get('/radio/stations');
         this.stations = response.data;
         
         const authStore = useAuthStore();
@@ -188,7 +188,9 @@ export const useStationStore = defineStore('station', {
         const response = await apiClient.get(`/${this.radioName}/radio/status`);
         const data = response.data;
         this.stationInfo = data;
-        this.stationName = data.name || this.radioName;
+        // Try to get the display name from the stations list first, then from station info, then fall back to radioName
+        const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
+        this.stationName = currentStation?.displayName || data.name || this.radioName;
         this.djName = data.djName;
         this.djStatus = data.djStatus;
         this.isWarmingUp = false; // Stop warming up on successful fetch
@@ -229,7 +231,9 @@ export const useStationStore = defineStore('station', {
                 this.isAsleep = true;
                 this.isBroadcasting = false;
                 this.statusText = 'Station is asleep. Click to wake it up.';
-                this.stationName = this.radioName;
+                // Use display name from stations list if available
+                const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
+                this.stationName = currentStation?.displayName || this.radioName;
                 this.stopPolling();
                 return;
             }
@@ -278,6 +282,7 @@ export const useStationStore = defineStore('station', {
         this.isBroadcasting = false;
         this.djName = null;
         this.djStatus = null;
+        this.nowPlaying = 'Loading...'; // Clear previous station's song title
         this.statusText = 'Loading station information...';
         
         // Then fetch the actual station info
