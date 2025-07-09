@@ -188,7 +188,6 @@ export const useStationStore = defineStore('station', {
         const response = await apiClient.get(`/${this.radioName}/radio/status`);
         const data = response.data;
         this.stationInfo = data;
-        // Try to get the display name from the stations list first, then from station info, then fall back to radioName
         const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
         this.stationName = currentStation?.displayName || data.name || this.radioName;
         this.djName = data.djName;
@@ -204,11 +203,9 @@ export const useStationStore = defineStore('station', {
           this.isWaitingForCurator = false;
           this.isAsleep = false;
           this.isBroadcasting = data.currentStatus === 'ON_LINE';
-          // Only update nowPlaying if there's a current song, otherwise keep the previous value
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
           }
-          // Construct the status text from other data if not waiting
           let displayMessageParts = [];
           if (data.managedBy) displayMessageParts.push(`Mode: ${data.managedBy}`);
           if (data.countryCode) displayMessageParts.push(`Country: ${data.countryCode}`);
@@ -231,7 +228,6 @@ export const useStationStore = defineStore('station', {
                 this.isAsleep = true;
                 this.isBroadcasting = false;
                 this.statusText = 'Station is asleep. Click to wake it up.';
-                // Use display name from stations list if available
                 const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
                 this.stationName = currentStation?.displayName || this.radioName;
                 this.stopPolling();
@@ -273,7 +269,6 @@ export const useStationStore = defineStore('station', {
         this.radioName = newStationName;
         storageService.saveLastStation(newStationName);
         
-        // Immediately update UI to show new station name and neutral state
         this.stationName = newStationName.charAt(0).toUpperCase() + newStationName.slice(1);
         this.stationColor = null; // Reset to neutral color
         this.isAsleep = false;
@@ -282,16 +277,14 @@ export const useStationStore = defineStore('station', {
         this.isBroadcasting = false;
         this.djName = null;
         this.djStatus = null;
-        this.nowPlaying = 'Loading...'; // Clear previous station's song title
+        this.nowPlaying = 'Loading...'; 
         this.statusText = 'Loading station information...';
         
-        // Then fetch the actual station info
         this.startPolling();
       }
     },
 
     addCustomStation(station) {
-      // Check if station already exists
       const existingStation = this.stations.find(s => s.name === station.name);
       if (!existingStation) {
         this.stations.push(station);
@@ -305,7 +298,6 @@ export const useStationStore = defineStore('station', {
         this.stations.splice(index, 1);
         console.log(`Removed custom station: ${stationName}`);
         
-        // If we're currently on this station, switch to the first available station
         if (this.radioName === stationName) {
           const realStations = this.stations.filter(s => s.type !== 'auth' && s.type !== 'custom');
           if (realStations.length > 0) {
@@ -318,12 +310,11 @@ export const useStationStore = defineStore('station', {
     },
 
     startPolling(fast = false) {
-      this.stopPolling(); // Ensure no multiple intervals are running
-      this.fetchStationInfo(); // Fetch immediately on start
+      this.stopPolling(); 
+      this.fetchStationInfo(); 
       const fastInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_FAST_MS, 10) || 5000;
       const regularInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_REGULAR_MS, 10) || 15000;
       const interval = fast ? fastInterval : regularInterval;
-      // Poll for updates
       this.statusPollingInterval = setInterval(() => {
         this.fetchStationInfo();
       }, interval);
@@ -336,8 +327,7 @@ export const useStationStore = defineStore('station', {
       }
     },
 
-    startListPolling() {
-      this.stopListPolling(); // prevent duplicates
+    startListPolling() { 
       const listInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_LIST_MS, 10) || 60000;
       this.listPollingInterval = setInterval(() => {
         this.updateStationsList();

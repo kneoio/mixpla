@@ -2,7 +2,6 @@ import axios from 'axios';
 import keycloak from './keycloak';
 import { MIXPLA_APP_HEADER } from '../config/version';
 
-// Authenticated API client for protected endpoints
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: {
@@ -18,7 +17,6 @@ apiClient.interceptors.request.use(async (config) => {
       config.headers.Authorization = `Bearer ${keycloak.token}`;
     } catch (error) {
       console.error('Failed to refresh token:', error);
-      // Do not logout here, let the calling components decide what to do
       return Promise.reject(error);
     }
   }
@@ -27,7 +25,6 @@ apiClient.interceptors.request.use(async (config) => {
   return Promise.reject(error);
 });
 
-// Public API client for endpoints that don't require authentication
 const publicApiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   headers: {
@@ -35,6 +32,5 @@ const publicApiClient = axios.create({
   }
 });
 
-// Export both clients
 export default apiClient;
 export { publicApiClient };

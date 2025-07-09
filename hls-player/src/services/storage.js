@@ -1,10 +1,8 @@
-// src/services/storage.js
 
 const LAST_STATION_KEY = 'mixpla_last_station';
 const LAST_THEME_KEY = 'mixpla_last_theme';
 
 export const storageService = {
-  // --- Station --- 
   saveLastStation(stationName) {
     if (typeof stationName === 'string') {
       localStorage.setItem(LAST_STATION_KEY, stationName);
@@ -15,7 +13,6 @@ export const storageService = {
     return localStorage.getItem(LAST_STATION_KEY);
   },
 
-  // --- Theme ---
   saveLastTheme(themeName) {
     if (typeof themeName === 'string') {
       localStorage.setItem(LAST_THEME_KEY, themeName);
