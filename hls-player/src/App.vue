@@ -9,86 +9,157 @@
     <router-view />
     <footer>
       <p class="version-text">v.{{ VERSION }}</p>
-      <div v-if="isAuthenticated" class="message-button-wrapper">
-        <n-button type="primary" @click="showMessageDialog = true" class="message-button">
-          Send Message
-        </n-button>
+      <div class="message-section">
+        <div v-if="isAuthenticated">
+          <transition name="fade" mode="out-in">
+            <div v-if="!showMessageInput" key="button" class="message-button-wrapper">
+              <n-button 
+                type="primary" 
+                @click="toggleMessageInput" 
+                class="message-button"
+                round
+                size="medium"
+                circle
+              >
+                <template #icon>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
+                </template>
+              </n-button>
+            </div>
+            <div v-else key="input" class="message-input-wrapper">
+              <n-input
+                v-model:value="messageText"
+                type="textarea"
+                placeholder="Type your message here..."
+                :autosize="{
+                  minRows: 4,
+                  maxRows: 4
+                }"
+                @keydown.enter.exact.prevent="handleMessageSubmit"
+                class="message-textarea"
+                ref="messageInput"
+                @vue:mounted="focusMessageInput"
+              />
+              <div class="message-actions">
+                <n-button 
+                  type="primary" 
+                  @click="handleMessageSubmit" 
+                  :disabled="!messageText.trim()"
+                  class="send-button"
+                  round
+                  size="large"
+                  circle
+                >
+                  <template #icon>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                  </template>
+                </n-button>
+                <n-button 
+                  @click="cancelMessage" 
+                  class="cancel-button"
+                  round
+                  size="small"
+                  secondary
+                  circle
+                >
+                  <template #icon>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                  </template>
+                </n-button>
+              </div>
+            </div>
+          </transition>
+        </div>
       </div>
     </footer>
-
-    <!-- Message Input Dialog -->
-    <n-modal v-model:show="showMessageDialog" :mask-closable="false">
-      <n-card
-        style="width: 90%; max-width: 500px;"
-        title="Send a Message"
-        :bordered="false"
-        size="huge"
-        role="dialog"
-        aria-modal="true"
-      >
-        <n-input
-          v-model:value="messageText"
-          type="textarea"
-          placeholder="Type your message here..."
-          :autosize="{
-            minRows: 3,
-            maxRows: 10
-          }"
-          @keydown.enter.prevent="handleMessageSubmit"
-        />
-        <template #footer>
-          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
-            <n-button @click="showMessageDialog = false">Cancel</n-button>
-            <n-button type="primary" @click="handleMessageSubmit" :disabled="!messageText.trim()">
-              Send
-            </n-button>
-          </div>
-        </template>
-      </n-card>
-    </n-modal>
   </n-config-provider>
 </template>
 
 <script setup>
-import { computed, watch, ref } from 'vue';
-import { NConfigProvider, NGlobalStyle, darkTheme, NButton, NModal, NCard, NInput } from 'naive-ui';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { NConfigProvider, NGlobalStyle, NButton, NInput } from 'naive-ui';
+import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
 import { useAuthStore } from './stores/auth';
 import { VERSION } from './config/version';
 
 // Message dialog state
-const showMessageDialog = ref(false);
+const showMessageInput = ref(false);
 const messageText = ref('');
+
+// Debug function to log auth state
+const logAuthState = () => {
+  console.log('Auth state:', {
+    isAuthenticated: authStore.isAuthenticated,
+    user: authStore.user,
+    showMessageInput: showMessageInput.value
+  });};
+
+const messageInput = ref(null);
+
+const focusMessageInput = () => {
+  if (messageInput.value) {
+    messageInput.value.focus();
+  }
+};
+
+const toggleMessageInput = () => {
+  console.log('Toggle message input. Current state:', showMessageInput.value);
+  showMessageInput.value = !showMessageInput.value;
+  logAuthState();
+  
+  if (showMessageInput.value) {
+    nextTick(() => {
+      focusMessageInput();
+    });
+  }
+};
 
 const handleMessageSubmit = async () => {
   if (!messageText.value.trim()) return;
   
   try {
-    // Here you can add your message submission logic
     console.log('Message to send:', messageText.value);
-    
-    // Simulate API call
-    // await messageApi.sendMessage(messageText.value);
-    
-    // Show success message
-    window.$message?.success('Message sent successfully!');
-    
-    // Reset and close dialog
+    window.$message?.success('Message sent!');
     messageText.value = '';
-    showMessageDialog.value = false;
+    showMessageInput.value = false;
   } catch (error) {
     console.error('Failed to send message:', error);
     window.$message?.error('Failed to send message. Please try again.');
   }
 };
 
+const cancelMessage = () => {
+  messageText.value = '';
+  showMessageInput.value = false;
+};
+
 const uiStore = useUiStore();
 const authStore = useAuthStore();
+const isAuthenticated = computed(() => authStore.isAuthenticated);
+
+// Initialize auth when component mounts
+onMounted(async () => {
+  try {
+    await authStore.init();
+    console.log('Auth initialized. Authenticated:', authStore.isAuthenticated);
+  } catch (error) {
+    console.error('Failed to initialize auth:', error);
+  }
+});
+
+// Watch for auth state changes
+watch(() => authStore.isAuthenticated, (newValue) => {
+  console.log('Auth state changed:', newValue);
+});
 
 const naiveTheme = computed(() => (uiStore.theme === 'dark' ? darkTheme : null));
-
-// Check if user is authenticated
-const isAuthenticated = computed(() => authStore.isAuthenticated);
 
 const themeOverrides = {
   common: {
@@ -227,26 +298,69 @@ footer {
   margin: 0 auto;
 }
 
-/* Message button styles */
-.message-button-wrapper {
+/* Message section styles */
+.message-section {
+  width: 100%;
   margin-top: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.message-button-wrapper {
   width: 100%;
   display: flex;
   justify-content: center;
 }
 
-.message-button {
+.message-button,
+.send-button {
   width: 100%;
   max-width: 200px;
-  transition: all 0.3s ease;
-  background-color: #18a058; /* Match primary button color */
+  transition: all 0.2s ease;
+  background-color: #18a058;
   margin: 0 auto;
 }
 
-.message-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  background-color: #36ad6a; /* Slightly lighter on hover */
+.message-button:hover,
+.send-button:hover {
+  transform: translateY(-1px);
+  background-color: #36ad6a;
+}
+
+.message-input-wrapper {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.message-textarea {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  transition: border-color 0.3s ease;
+}
+
+.message-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cancel-button {
+  color: #666;
+}
+
+/* Animation */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 /* Modal styles */

@@ -16,7 +16,38 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
           // Allow the Keycloak silent SSO page to work correctly.
-          navigateFallbackAllowlist: [/^\/silent-check-sso.html/]
+          navigateFallback: null,
+          navigateFallbackDenylist: [/^\/api/, /^\/__/],
+          runtimeCaching: [
+            {
+              urlPattern: /^https?:\/\/fonts\.googleapis\.com/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https?:\/\/fonts\.gstatic\.com/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            }
+          ]
         },
         devOptions: {
           enabled: true
