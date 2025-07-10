@@ -14,18 +14,11 @@
           <transition name="fade" mode="out-in">
             <div v-if="!showMessageInput" key="button" class="message-button-wrapper">
               <n-button 
-                type="primary" 
                 @click="toggleMessageInput" 
-                class="message-button"
-                round
-                size="medium"
-                circle
+                class="message-button invisible-button"
+                size="large"
+                text
               >
-                <template #icon>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                  </svg>
-                </template>
               </n-button>
             </div>
             <div v-else key="input" class="message-input-wrapper">
@@ -44,18 +37,14 @@
               />
               <div class="message-actions">
                 <n-button 
-                  type="primary" 
                   @click="handleMessageSubmit" 
                   :disabled="!messageText.trim()"
-                  class="send-button"
-                  round
-                  size="large"
+                  class="send-button gradient-button"
                   circle
+                  size="large"
                 >
                   <template #icon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
+                    <n-icon :component="Comet" size="20" />
                   </template>
                 </n-button>
                 <n-button 
@@ -83,7 +72,8 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { NConfigProvider, NGlobalStyle, NButton, NInput } from 'naive-ui';
+import { NConfigProvider, NGlobalStyle, NButton, NInput, NIcon } from 'naive-ui';
+import { Comet } from '@vicons/tabler';
 import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
 import { useAuthStore } from './stores/auth';
@@ -92,6 +82,7 @@ import { VERSION } from './config/version';
 // Message dialog state
 const showMessageInput = ref(false);
 const messageText = ref('');
+let autoCloseTimer = null;
 
 // Debug function to log auth state
 const logAuthState = () => {
@@ -110,14 +101,37 @@ const focusMessageInput = () => {
 };
 
 const toggleMessageInput = () => {
-  console.log('Toggle message input. Current state:', showMessageInput.value);
+  console.log('// Toggle message input visibility');
   showMessageInput.value = !showMessageInput.value;
-  logAuthState();
-  
   if (showMessageInput.value) {
+    // Start 30-second auto-close timer
+    startAutoCloseTimer();
     nextTick(() => {
-      focusMessageInput();
+      const textarea = document.querySelector('.message-textarea textarea');
+      if (textarea) {
+        textarea.focus();
+      }
     });
+  } else {
+    // Clear timer when closing manually
+    clearAutoCloseTimer();
+  }
+};
+
+// Auto-close timer functions
+const startAutoCloseTimer = () => {
+  clearAutoCloseTimer(); // Clear any existing timer
+  autoCloseTimer = setTimeout(() => {
+    if (showMessageInput.value) {
+      cancelMessage();
+    }
+  }, 30000); // 30 seconds
+};
+
+const clearAutoCloseTimer = () => {
+  if (autoCloseTimer) {
+    clearTimeout(autoCloseTimer);
+    autoCloseTimer = null;
   }
 };
 
@@ -129,6 +143,7 @@ const handleMessageSubmit = async () => {
     window.$message?.success('Message sent!');
     messageText.value = '';
     showMessageInput.value = false;
+    clearAutoCloseTimer();
   } catch (error) {
     console.error('Failed to send message:', error);
     window.$message?.error('Failed to send message. Please try again.');
@@ -138,6 +153,7 @@ const handleMessageSubmit = async () => {
 const cancelMessage = () => {
   messageText.value = '';
   showMessageInput.value = false;
+  clearAutoCloseTimer();
 };
 
 const uiStore = useUiStore();
@@ -311,8 +327,7 @@ footer {
   justify-content: center;
 }
 
-.message-button,
-.send-button {
+.message-button {
   width: 100%;
   max-width: 200px;
   transition: all 0.2s ease;
@@ -320,11 +335,54 @@ footer {
   margin: 0 auto;
 }
 
-.message-button:hover,
-.send-button:hover {
+/* Gradient button styling like Launch Your Radio button */
+.gradient-button {
+  min-width: 48px !important;
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(to right, #2563eb, #9333ea) !important;
+  border: 2px solid transparent !important;
+  color: white !important;
+  font-weight: bold !important;
+  transition: all 0.5s ease-out !important;
+  transform: scale(1) !important;
+}
+
+.gradient-button:hover {
+  border-color: #2563eb !important;
+  background: linear-gradient(to right, transparent, transparent) !important;
+  color: #2563eb !important;
+  transform: scale(1.05) !important;
+}
+
+.invisible-button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: transparent !important;
+  min-height: 60px !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  padding: 20px !important;
+  cursor: pointer;
+}
+
+.invisible-button:hover {
+  background: transparent !important;
+  transform: none !important;
+}
+
+.message-button:hover {
   transform: translateY(-1px);
   background-color: #36ad6a;
 }
+
+/* Let send button use default Naive UI hover behavior */
 
 .message-input-wrapper {
   width: 100%;
@@ -338,6 +396,10 @@ footer {
   margin-bottom: 0.5rem;
   border-radius: 8px;
   transition: border-color 0.3s ease;
+}
+
+.message-textarea textarea {
+  text-align: left !important;
 }
 
 .message-actions {
