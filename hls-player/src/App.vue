@@ -77,6 +77,8 @@ import { Comet } from '@vicons/tabler';
 import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
 import { useAuthStore } from './stores/auth';
+import { useStationStore } from './stores/station';
+import { sendMessage } from './services/api';
 import { VERSION } from './config/version';
 
 // Message dialog state
@@ -139,8 +141,18 @@ const handleMessageSubmit = async () => {
   if (!messageText.value.trim()) return;
   
   try {
-    console.log('Message to send:', messageText.value);
+    console.log('Sending message to server:', messageText.value);
+    
+    // Get current station brand for the message
+    const currentBrand = stationStore.radioName || 'aizoo';
+    
+    // Send message to server
+    await sendMessage(messageText.value, currentBrand);
+    
+    console.log('Message sent successfully');
     window.$message?.success('Message sent!');
+    
+    // Clear the input and close
     messageText.value = '';
     showMessageInput.value = false;
     clearAutoCloseTimer();
@@ -158,6 +170,7 @@ const cancelMessage = () => {
 
 const uiStore = useUiStore();
 const authStore = useAuthStore();
+const stationStore = useStationStore();
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 
 // Initialize auth when component mounts

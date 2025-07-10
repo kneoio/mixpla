@@ -32,5 +32,35 @@ const publicApiClient = axios.create({
   }
 });
 
+export const sendMessage = async (message, brand = 'aizoo') => {
+  try {
+    const token = keycloak.token;
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+    
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const sender = payload.preferred_username || payload.username || payload.sub;
+    
+    if (!sender) {
+      throw new Error('Unable to extract username from token');
+    }
+    
+    const response = await apiClient.post('/api/memories/', {
+      brand: brand,
+      memoryType: 'INSTANT_MESSAGE',
+      content: {
+        message: message,
+        sender: sender
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Failed to send message:', error);
+    throw error;
+  }
+};
+
 export default apiClient;
 export { publicApiClient };
