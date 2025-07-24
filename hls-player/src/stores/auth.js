@@ -12,7 +12,6 @@ export const useAuthStore = defineStore('auth', () => {
   }
   
   function notifyAuthStateChanged() {
-    // Import here to avoid circular dependency
     import('./station').then(({ useStationStore }) => {
       const stationStore = useStationStore();
       if (stationStore?.onAuthStateChanged) {
@@ -22,18 +21,17 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
-    // Redirect to the home page after logout
     keycloak.logout({ redirectUri: window.location.origin });
   }
 
   async function init() {
+    if (isAuthenticated.value) {
+      return;
+    }
+    
     isLoading.value = true;
     try {
-      const auth = await keycloak.init({ 
-        onLoad: 'check-sso',
-        silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html'
-      });
-      
+      const auth = await keycloak.init({});
       isAuthenticated.value = auth;
 
       if (auth) {
@@ -43,7 +41,6 @@ export const useAuthStore = defineStore('auth', () => {
         console.log('Not authenticated');
       }
       
-      // Notify station store about auth state change
       this.notifyAuthStateChanged();
     } catch (error) {
       console.error('Failed to initialize Keycloak:', error);

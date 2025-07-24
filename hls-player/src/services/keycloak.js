@@ -1,12 +1,20 @@
 import Keycloak from 'keycloak-js';
 
-// TODO: Replace with your actual Client ID
 const keycloakConfig = {
   url: 'https://auth.kneo.io',
   realm: 'kneo',
-  clientId: 'mixpla'
+  clientId: 'mixpla',
+  onLoad: 'check-sso',
+  silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`
 };
 
-const keycloak = new Keycloak(keycloakConfig);
+let keycloakInstance = null;
 
-export default keycloak;
+export function getKeycloak() {
+  if (!keycloakInstance) {
+    keycloakInstance = new Keycloak(keycloakConfig);
+  }
+  return keycloakInstance;
+}
+
+export default getKeycloak();

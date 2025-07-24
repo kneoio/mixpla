@@ -4,7 +4,6 @@
     <audio ref="audioPlayer" style="display: none;"></audio>
 
     <div class="player-content">
-      <!-- Station Info -->
       <div class="station-info" :style="darkThemeTextStyle">
         <h1 class="station-name">{{ stationName }}</h1>
         <div class="curator-info" :style="[{ visibility: curatorText ? 'visible' : 'hidden' }, dynamicColorStyle]">
@@ -12,12 +11,9 @@
         </div>
       </div>
 
-      <!-- Now Playing Info -->
       <div class="now-playing-info" :style="darkThemeTextStyle">
         <div class="now-playing-ticker"><span>{{ nowPlaying }}</span></div>
       </div>
-
-      <!-- Controls -->
       <div class="controls">
         <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWarmingUp || isWaitingForCurator">
           <template #icon>
@@ -26,9 +22,7 @@
         </n-button>
       </div>
 
-      <!-- Buffer Status Indicator is now in App.vue -->
 
-      <!-- Station Status Text -->
       <div class="station-status">
         <span>{{ statusText }}</span>
       </div>
@@ -42,13 +36,14 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
+import { useSegmentStatsStore } from '../stores/segmentStats';
 import { storeToRefs } from 'pinia';
-import { NButton, NIcon } from 'naive-ui';
+import { NButton, NIcon, useMessage } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Hls from 'hls.js';
 
-// --- Refs and State ---
+
 const audioPlayer = ref(null);
 
 
@@ -57,19 +52,27 @@ const isPlaying = ref(false);
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
-const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore); // Use storeToRefs for reactivity
+const segmentStatsStore = useSegmentStatsStore();
+const message = useMessage();
+const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
+
+
+const isDebugMode = computed(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('debug') === '1' || urlParams.get('debug') === 'true';
+});
 
 const displayedCuratorText = ref('');
 let typingTimeout = null;
 let retypeInterval = null;
 
-// Audio visualizer state
+
 let audioCtx = null;
 let analyser = null;
 let source = null;
 let animationFrameId = null;
 
-// --- Computed Properties ---
+
 const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
 
 const isTyping = ref(false);
@@ -97,7 +100,7 @@ const darkThemeTextStyle = computed(() => {
   return {};
 });
 
-// --- Watchers ---
+
 const startTypingAnimation = (text) => {
   if (typingTimeout) clearTimeout(typingTimeout);
   displayedCuratorText.value = '';
@@ -123,12 +126,12 @@ watch(curatorText, (newText, oldText) => {
   if (retypeInterval) clearInterval(retypeInterval);
   
   if (newText) {
-    startTypingAnimation(newText); // Type immediately
+    startTypingAnimation(newText);
     retypeInterval = setInterval(() => {
-      startTypingAnimation(newText); // Retype every 15s
+      startTypingAnimation(newText);
     }, 15000);
   } else {
-    startTypingAnimation(null); // Clear text and stop typing
+    startTypingAnimation(null);
   }
 });
 
@@ -139,7 +142,7 @@ watch(
     waiting: isWaitingForCurator.value,
   }),
   (newStatus, oldStatus) => {
-    // Destroy the player if the station is no longer playable
+
     if (newStatus.asleep || newStatus.waiting) {
       if (hls) {
         console.log(`[Player] Station ${newStatus.name} is not playable. Destroying HLS instance.`);
@@ -150,7 +153,7 @@ watch(
       return;
     }
 
-    // Initialize the player if the station is now playable
+
     if (newStatus.name && !newStatus.asleep && !newStatus.waiting) {
       const nameChanged = oldStatus ? newStatus.name !== oldStatus.name : true;
       const justWokeUp = oldStatus ? oldStatus.asleep && !newStatus.asleep : false;
@@ -168,7 +171,7 @@ watch(
   { deep: true, immediate: true }
 );
 
-// --- Player Logic ---
+
 const togglePlay = () => {
   if (isAsleep.value) {
     stationStore.wakeUpStation();
@@ -179,8 +182,7 @@ const togglePlay = () => {
   }
   if (!audioPlayer.value) return;
 
-  // On iOS, AudioContext must be resumed by a user gesture.
-  // This ensures that if context exists and is suspended, a click will resume it.
+
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
@@ -201,30 +203,115 @@ const initializeHls = (radioName) => {
     return;
   }
 
-    const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${radioName}/radio/stream.m3u8`;
+
+  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${radioName}/radio/stream.m3u8`;
+
+  if (isDebugMode.value) {
+    segmentStatsStore.resetStats();
+  }
+
+
   hls = new Hls({
     debug: false,
+    enableWorker: true,
     maxBufferLength: 30,
     maxMaxBufferLength: 600,
     fragLoadingTimeOut: 20000,
     manifestLoadingTimeOut: 10000,
     levelLoadingTimeOut: 10000,
+    xhrSetup: (xhr, url) => {
+      if (!isDebugMode.value) return;
+      
+      const startTime = performance.now();
+      const segmentUrl = new URL(url);
+      const segmentType = segmentUrl.pathname.endsWith('.m3u8') ? 'manifest' : 'segment';
+      
+
+      if (isDebugMode.value) {
+        segmentStatsStore.addSegmentRequest({
+          url: url,
+          type: segmentType,
+          startTime: startTime
+        });
+      }
+      
+      xhr.addEventListener('loadend', () => {
+        const loadTime = performance.now() - startTime;
+        const isSuccess = xhr.status >= 200 && xhr.status < 300;
+        
+
+        stationStore.trackSegmentLoad(isSuccess);
+        
+        if (isSuccess && isDebugMode.value) {
+          segmentStatsStore.addSegmentSuccess({
+            url: url,
+            type: segmentType,
+            startTime: startTime
+          }, xhr.response);
+          
+          console.log(`[SEGMENT] Loaded ${segmentType}:`, {
+            url: url,
+            status: xhr.status,
+            size: xhr.response?.length || 0,
+            time: loadTime.toFixed(2) + 'ms'
+          });
+        }
+      });
+      
+      xhr.addEventListener('error', (error) => {
+        const segmentType = new URL(url).pathname.endsWith('.m3u8') ? 'manifest' : 'segment';
+        
+
+        if (xhr.status === 404) {
+          stationStore.track404Error();
+          if (isDebugMode.value) {
+            console.error(`[404] Failed to load ${segmentType}: ${url.split('/').pop()}`);
+          }
+        }
+        
+
+        if (isDebugMode.value) {
+          segmentStatsStore.addSegmentError({
+            url: url,
+            type: segmentType,
+            startTime: performance.now()
+          }, error);
+          
+          console.error(`[SEGMENT] Failed to load ${segmentType}:`, {
+            url: url,
+            status: xhr.status,
+            error: error.message
+          });
+        }
+      });
+    }
   });
 
   hls.loadSource(streamUrl);
   hls.attachMedia(audioPlayer.value);
 
 
+  window.hlsInstance = hls;
 
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    console.log('[Player] Manifest parsed, attempting to play...');
+    if (isDebugMode.value) {
+      console.log('[Player] Manifest parsed, attempting to play...');
+    }
     audioPlayer.value.play().catch(e => {
+      if (isDebugMode.value) {
         console.error('Error on autoplay:', e);
+      }
     });
   });
   
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
     const fragTitle = data.frag.title;
+    
+
+    if (isDebugMode && fragTitle && fragTitle !== stationStore.nowPlaying) {
+
+    }
+    
     if (fragTitle) {
       stationStore.nowPlaying = fragTitle;
     }
@@ -236,11 +323,32 @@ const initializeHls = (radioName) => {
     }
   });
 
-  hls.on(Hls.Events.ERROR, (event, data) => {
+
+  if (isDebugMode) {
+    hls.on(Hls.Events.LEVEL_UPDATED, () => {
+
+    });
+    
+    hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+      if (data.frag.discontinuity) {
+
+      }
+    });
+    
+    hls.on(Hls.Events.FRAG_LOAD_ERROR, () => {
+
+    });
+  }
+
+  hls.on(Hls.Events.ERROR, () => {
+    if (isDebugMode) {
+
+    }
+    
     if (data.fatal) {
       console.error('HLS.js fatal error:', data);
       stationStore.setBufferStatus('fatal');
-      // Attempt to recover
+
       switch (data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
           console.error("Fatal network error, trying to recover...");
@@ -261,6 +369,83 @@ const initializeHls = (radioName) => {
   hls.on(Hls.Events.BUFFER_STALLED, (event, data) => {
     stationStore.setBufferStatus('stalling');
   });
+
+
+  const checkBufferHealth = () => {
+    if (!audioPlayer.value || !hls) return;
+    
+    try {
+      const buffered = audioPlayer.value.buffered;
+      const currentTime = audioPlayer.value.currentTime;
+      
+      if (buffered.length > 0) {
+
+        let bufferAhead = 0;
+        for (let i = 0; i < buffered.length; i++) {
+          if (buffered.start(i) <= currentTime && currentTime <= buffered.end(i)) {
+            bufferAhead = buffered.end(i) - currentTime;
+          }
+        }
+        
+        // Set buffer status based on buffer health
+        if (bufferAhead < 2) {
+          stationStore.setBufferStatus('critical');
+        } else if (bufferAhead < 5) {
+          stationStore.setBufferStatus('poor');
+        } else if (bufferAhead < 10) {
+          stationStore.setBufferStatus('ok');
+        } else {
+          stationStore.setBufferStatus('healthy');
+        }
+      }
+    } catch (error) {
+      stationStore.setBufferStatus('fatal');
+    }
+  };
+  
+  // Check buffer health every 2 seconds
+  const bufferHealthInterval = setInterval(checkBufferHealth, 2000);
+  
+  // Audio player event debugging for song jumping (debug mode only)
+  if (isDebugMode) {
+    let lastCurrentTime = 0;
+    let lastTimeUpdate = Date.now();
+    
+    audioPlayer.value.addEventListener('seeking', () => {
+      // Audio seeking event
+    });
+    
+    audioPlayer.value.addEventListener('seeked', () => {
+      // Audio seeked event
+    });
+    
+    audioPlayer.value.addEventListener('timeupdate', () => {
+      const currentTime = audioPlayer.value.currentTime;
+      const now = Date.now();
+      const timeDiff = Math.abs(currentTime - lastCurrentTime);
+      const realTimeDiff = (now - lastTimeUpdate) / 1000;
+      
+      // Detect unexpected time jumps (more than 2 seconds difference from expected)
+      if (realTimeDiff > 0.5 && timeDiff > realTimeDiff + 2) {
+        // Unexpected time jump detected
+      }
+      
+      lastCurrentTime = currentTime;
+      lastTimeUpdate = now;
+    });
+    
+    audioPlayer.value.addEventListener('ended', () => {
+      // Audio ended event
+    });
+    
+    audioPlayer.value.addEventListener('stalled', () => {
+      // Audio stalled event
+    });
+    
+    audioPlayer.value.addEventListener('suspend', () => {
+      // Audio suspend event
+    });
+  }
 };
 
 
@@ -301,15 +486,32 @@ onMounted(() => {
   const audio = audioPlayer.value;
   if (!audio) return;
 
+  // Expose references globally for diagnostics
+  window.hlsInstance = null;
+  window.audioContext = null;
+  window.audioElement = audio;
+
   const onPlay = () => {
     isPlaying.value = true;
-    // One-time setup for the visualizer, triggered by the first actual play event.
+    
     if (!audioCtx) {
       setupAudioVisualizer();
+      window.audioContext = audioCtx;
     }
-    // Start the animation loop.
+    
     renderFrame();
   };
+  
+  audio.addEventListener('loadedmetadata', () => {
+    if (!audioPlayer.value) return;
+    audioPlayer.value.playbackRate = 1.0;
+  });
+  
+  audio.addEventListener('timeupdate', () => {
+    // Time update handler
+  });
+  
+  audio.addEventListener('playing', onPlay);
 
   const onPauseOrEnd = () => {
     isPlaying.value = false;
@@ -377,14 +579,14 @@ onBeforeUnmount(() => {
 .station-status {
   font-size: 0.75rem;
   color: #aaa;
-  min-height: 1em; /* Reserve space to prevent layout shift */
+  min-height: 1em; 
 }
 
 .curator-info {
   font-family: 'Goldman', sans-serif;
   font-size: 0.85rem;
   margin-top: 4px;
-  min-height: 1.2em; /* Reserve space to prevent layout jump */
+  min-height: 1.2em; 
 }
 
 .blinking-cursor {

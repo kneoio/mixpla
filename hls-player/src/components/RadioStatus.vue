@@ -40,7 +40,7 @@ onUnmounted(() => {
 .status-text {
   font-size: 0.9em;
   color: #555;
-  min-height: 1.2em; /* Prevents layout shift */
+  min-height: 1.2em; 
 }
 
 .status-text.error {

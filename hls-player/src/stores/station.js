@@ -3,7 +3,6 @@ import { storageService } from '../services/storage';
 import apiClient, { publicApiClient } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 
-// Helper function to lighten/darken a hex color
 const lightenColor = (hex, percent) => {
     if (!hex || !hex.startsWith('#')) return hex;
     const num = parseInt(hex.substring(1), 16),
@@ -17,59 +16,136 @@ const lightenColor = (hex, percent) => {
 export const useStationStore = defineStore('station', {
   state: () => ({
     animationIntensity: 0,
-    stations: [], 
-    radioName: storageService.getLastStation() || null, 
+    stations: [],
+    radioName: storageService.getLastStation() || null,
     stationInfo: null,
     nowPlaying: 'N/A',
     statusPollingInterval: null,
     listPollingInterval: null,
-    bufferStatus: 'healthy', 
-    animationIntensity: 0, 
+    bufferStatus: 'healthy',
+    animationIntensity: 0,
     stationColor: null,
     statusText: 'Loading stations...',
     stationName: 'Radio',
-    isAsleep: false, 
-    isWaitingForCurator: false, 
+    isAsleep: false,
+    isWaitingForCurator: false,
     isWarmingUp: false,
     isBroadcasting: false,
-    bufferStatus: 'ok', 
+    bufferStatus: 'ok',
     djName: null,
     djStatus: null,
+    error404: {
+      enabled: false,
+      count: 0
+    },
+    segmentErrors: {
+      total: 0,
+      lastError: null,
+      recentErrors: [],
+      errorRate: 0,
+      lastHour: 0
+    },
+    segmentStats: {
+      total: 0,
+      success: 0,
+      failed: 0
+    }
   }),
 
   getters: {
     dynamicBorderStyle(state) {
-      if (!state.stationColor) {
-        return {};
-      }
+      if (!state.stationColor) return '';
+      
       const color = state.stationColor;
-      const hex = color.substring(1);
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      return {
-        '--dynamic-border-color': color,
-        '--dynamic-border-color-alt': lightenColor(color, -0.2),
-        '--dynamic-border-rgb': `${r}, ${g}, ${b}`,
-      };
+      const lightColor = lightenColor(color, 30);
+      
+      return `
+        --station-color: ${color};
+        --station-color-light: ${lightColor};
+        --station-glow: 0 0 10px ${color}80;
+        --station-glow-hover: 0 0 20px ${color}80;
+        --station-gradient: linear-gradient(135deg, ${color}, ${lightColor});
+      `;
     },
+    
+    segmentErrorStats(state) {
+      const total = state.segmentStats.total || 1;
+      const successRate = (state.segmentStats.success / total) * 100;
+      
+      return {
+        totalRequests: state.segmentStats.total,
+        successCount: state.segmentStats.success,
+        errorCount: state.segmentStats.failed,
+        successRate: Math.round(successRate * 100) / 100,
+        lastError: state.segmentErrors.lastError,
+        errorsLastHour: state.segmentErrors.lastHour,
+        errorRate: Math.round(state.segmentErrors.errorRate * 100) / 100
+      };
+    }
   },
 
   actions: {
+    set404Tracking(enabled) {
+      this.error404.enabled = enabled;
+    },
+    
+    track404Error() {
+      if (this.error404.enabled) {
+        this.error404.count++;
+      }
+    },
+    
+    get404Count(reset = false) {
+      const count = this.error404.count;
+      if (reset) {
+        this.error404.count = 0;
+      }
+      return count;
+    },
+    trackSegmentLoad(success = true) {
+      this.segmentStats.total++;
+      if (success) {
+        this.segmentStats.success++;
+      } else {
+        this.segmentStats.failed++;
+        
+        const errorTime = Date.now();
+        this.segmentErrors.total++;
+        this.segmentErrors.lastError = errorTime;
+        
+        const oneHourAgo = errorTime - (60 * 60 * 1000);
+        this.segmentErrors.recentErrors = this.segmentErrors.recentErrors
+          .filter(time => time > oneHourAgo)
+          .concat([errorTime]);
+        
+        const lastHourErrors = this.segmentErrors.recentErrors.length;
+        this.segmentErrors.errorRate = lastHourErrors / 60;
+        this.segmentErrors.lastHour = lastHourErrors;
+      }
+    },
+    
+    getSegmentErrorStats() {
+      return {
+        totalErrors: this.segmentErrors.total,
+        lastError: this.segmentErrors.lastError,
+        errorsLastHour: this.segmentErrors.lastHour,
+        errorRate: this.segmentErrors.errorRate,
+        successRate: this.segmentStats.total > 0 
+          ? (this.segmentStats.success / this.segmentStats.total) * 100 
+          : 100
+      };
+    },
     setBufferStatus(status) {
-      if (['ok', 'stalling', 'fatal'].includes(status)) {
+      if (['healthy', 'ok', 'poor', 'critical', 'stalling', 'fatal'].includes(status)) {
         this.bufferStatus = status;
       }
     },
     
-    // Update the auth entry based on current auth state
     updateAuthEntry() {
       const authStore = useAuthStore();
       
-      // Remove any existing auth entry
       this.stations = this.stations.filter(s => s.type !== 'auth');
       
-      // Add the appropriate auth entry
       const authEntry = authStore.isAuthenticated ? 
         {
           name: 'logout',
@@ -89,7 +165,6 @@ export const useStationStore = defineStore('station', {
       this.stations.push(authEntry);
     },
     
-    // Handle auth state changes
     onAuthStateChanged() {
       this.updateAuthEntry();
     },
@@ -99,10 +174,8 @@ export const useStationStore = defineStore('station', {
         const response = await publicApiClient.get('/radio/stations');
         this.stations = response.data;
         
-        // Always update the auth entry when fetching stations
         this.updateAuthEntry();
         
-        // Only auto-select station if not skipping and no valid current station
         if (!skipAutoSelect) {
           const stationExists = this.stations.some(s => s.name === this.radioName && s.type !== 'auth');
 
@@ -113,20 +186,17 @@ export const useStationStore = defineStore('station', {
               storageService.saveLastStation(this.radioName);
             }
           }
-          // Always start polling after fetching stations, it will use the correct radioName
-          this.startPolling(); // Start polling for the selected station
-          this.startListPolling(); // Start polling for the whole list
+          this.startPolling(); 
+          this.startListPolling(); 
         }
 
       } catch (error) {
         console.error('Failed to get stations list:', error);
         
-        // Check if error is due to null user and silently logout
         if (error.response?.data?.message && 
             error.response.data.message.includes('"user" is null')) {
           console.log('User is null, silently logging out...');
           
-          // Immediately clear UI state to prevent broken display
           this.stations = [];
           this.radioName = null;
           this.stationInfo = null;
@@ -137,7 +207,6 @@ export const useStationStore = defineStore('station', {
           this.isWarmingUp = false;
           this.isBroadcasting = false;
           
-          // Clear polling intervals
           if (this.statusPollingInterval) {
             clearInterval(this.statusPollingInterval);
             this.statusPollingInterval = null;
@@ -152,7 +221,6 @@ export const useStationStore = defineStore('station', {
           return;
         }
         
-        // If we have a current station playing, show it as a fallback
         if (this.radioName) {
           console.log('Creating fallback station entry for currently playing:', this.radioName);
           this.stations = [{
@@ -163,7 +231,6 @@ export const useStationStore = defineStore('station', {
             type: 'station'
           }];
           
-          // Add auth entry
           const authStore = useAuthStore();
           const authEntry = authStore.isAuthenticated ? 
             {
@@ -200,7 +267,7 @@ export const useStationStore = defineStore('station', {
         this.stationName = currentStation?.displayName || data.name || this.radioName;
         this.djName = data.djName;
         this.djStatus = data.djStatus;
-        this.isWarmingUp = false; // Stop warming up on successful fetch
+        this.isWarmingUp = false;
 
         if (data.currentStatus === 'ON_LINE' && data.currentSong === 'Waiting for curator to start the broadcast...') {
           this.isWaitingForCurator = true;
@@ -211,9 +278,11 @@ export const useStationStore = defineStore('station', {
           this.isWaitingForCurator = false;
           this.isAsleep = false;
           this.isBroadcasting = data.currentStatus === 'ON_LINE';
+          
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
           }
+            
           let displayMessageParts = [];
           if (data.managedBy) displayMessageParts.push(`Mode: ${data.managedBy}`);
           if (data.countryCode) displayMessageParts.push(`Country: ${data.countryCode}`);
@@ -222,8 +291,8 @@ export const useStationStore = defineStore('station', {
           this.statusText = displayMessageParts.join(', ');
         }
         
-        if (data.color && data.color.match(/^#[0-9a-fA-F]{6}$/)) {
-          this.stationColor = data.color;
+        if (data.color && data.color.match(/^#[0-9a-fA-F]{6,8}$/)) {
+          this.stationColor = data.color.length === 9 ? data.color.substring(0, 7) : data.color;
         } else {
           this.stationColor = null;
         }
@@ -304,7 +373,6 @@ export const useStationStore = defineStore('station', {
       this.stations = this.stations.filter(s => s.name !== stationName);
       storageService.removeCustomStation(stationName);
       
-      // If the current station was removed, select the first available station
       if (this.radioName === stationName) {
         this.setStation(this.stations[0]?.name || null);
       }

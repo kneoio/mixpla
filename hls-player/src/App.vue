@@ -1,12 +1,19 @@
 <template>
   <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
-    <n-global-style />
+    <n-message-provider>
+      <n-global-style />
     <div id="nav">
       <!--hide for now-->
       <!--<router-link to="/">Home</router-link> | -->
       <!--<router-link to="/profile">Profile</router-link>-->
     </div>
-    <router-view />
+    
+    <div class="app-content">
+      <router-view />
+      <AudioDiagnostics v-if="showDiagnostics" />
+    </div>
+    
+
     <footer>
       <p class="version-text">v.{{ VERSION }}</p>
       <div class="message-section">
@@ -67,26 +74,40 @@
         </div>
       </div>
     </footer>
+    
+    <!-- Diagnostics Toggle Button (only shown with ?debug=1 parameter) -->
+    <div v-if="debugMode" class="diagnostics-toggle">
+      <n-button 
+        @click="showDiagnostics = !showDiagnostics" 
+        type="primary" 
+        size="small"
+        style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"
+      >
+        {{ showDiagnostics ? 'Hide Diagnostics' : 'Show Diagnostics' }}
+      </n-button>
+    </div>
+
+    </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { NConfigProvider, NGlobalStyle, NButton, NInput, NIcon } from 'naive-ui';
+import { NConfigProvider, NGlobalStyle, NButton, NInput, NIcon, NMessageProvider } from 'naive-ui';
 import { Comet } from '@vicons/tabler';
 import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
 import { useAuthStore } from './stores/auth';
 import { useStationStore } from './stores/station';
-import { sendMessage } from './services/api';
+import { useRadioStatusStore } from './stores/radioStatus';
+import { storeToRefs } from 'pinia';
 import { VERSION } from './config/version';
+import AudioDiagnostics from './components/AudioDiagnostics.vue';
 
-// Message dialog state
 const showMessageInput = ref(false);
 const messageText = ref('');
 let autoCloseTimer = null;
 
-// Debug function to log auth state
 const logAuthState = () => {
   console.log('Auth state:', {
     isAuthenticated: authStore.isAuthenticated,
@@ -106,7 +127,6 @@ const toggleMessageInput = () => {
   console.log('// Toggle message input visibility');
   showMessageInput.value = !showMessageInput.value;
   if (showMessageInput.value) {
-    // Start 30-second auto-close timer
     startAutoCloseTimer();
     nextTick(() => {
       const textarea = document.querySelector('.message-textarea textarea');
@@ -115,14 +135,12 @@ const toggleMessageInput = () => {
       }
     });
   } else {
-    // Clear timer when closing manually
     clearAutoCloseTimer();
   }
 };
 
-// Auto-close timer functions
 const startAutoCloseTimer = () => {
-  clearAutoCloseTimer(); // Clear any existing timer
+  clearAutoCloseTimer(); 
   autoCloseTimer = setTimeout(() => {
     if (showMessageInput.value) {
       cancelMessage();
@@ -171,9 +189,19 @@ const cancelMessage = () => {
 const uiStore = useUiStore();
 const authStore = useAuthStore();
 const stationStore = useStationStore();
+const radioStatusStore = useRadioStatusStore();
+const { theme } = storeToRefs(uiStore);
+const { radioName } = storeToRefs(stationStore);
+
+const showDiagnostics = ref(false);
+
+const debugMode = computed(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('debug') === '1' || urlParams.get('debug') === 'true';
+});
+
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 
-// Initialize auth when component mounts
 onMounted(async () => {
   try {
     await authStore.init();
@@ -204,7 +232,7 @@ watch(() => uiStore.theme, (newTheme) => {
   if (newTheme === 'dark') {
     body.style.backgroundColor = darkTheme.common.bodyColor;
   } else {
-    body.style.backgroundColor = '#fdfdfd'; // A slightly off-white for light theme
+    body.style.backgroundColor = '#fdfdfd';
   }
 }, { immediate: true });
 </script>
@@ -348,7 +376,6 @@ footer {
   margin: 0 auto;
 }
 
-/* Gradient button styling like Launch Your Radio button */
 .gradient-button {
   min-width: 48px !important;
   width: 48px !important;
@@ -394,8 +421,6 @@ footer {
   transform: translateY(-1px);
   background-color: #36ad6a;
 }
-
-/* Let send button use default Naive UI hover behavior */
 
 .message-input-wrapper {
   width: 100%;
@@ -453,19 +478,15 @@ footer {
   border-top: 1px solid var(--n-divider-color);
 }
 
-/* Dark mode support */
 html.dark .n-card {
   background-color: var(--n-color);
   border: 1px solid var(--n-border-color);
 }
 
-/* Ensure proper spacing for the version text */
 .version-text {
   margin: 0 0 1rem 0;
   color: var(--n-text-color);
   font-size: 0.9em;
   opacity: 0.8;
 }
-
-
 </style>

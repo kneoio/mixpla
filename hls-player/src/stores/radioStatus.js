@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import apiClient from '../services/api'; // Use our configured axios instance
+import apiClient from '../services/api'; 
 const STATUS_PATH_SUFFIX = '/radio/status';
 const STATUS_REFRESH_INTERVAL = 15000;
 

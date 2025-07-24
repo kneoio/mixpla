@@ -67,13 +67,27 @@
   transition: background-color 0.3s ease;
 }
 
+.buffer-indicator.healthy {
+  background-color: #4caf50; /* Bright Green - Excellent buffer */
+}
+
 .buffer-indicator.ok {
-  background-color: #4caf50; /* Green */
+  background-color: #8bc34a; /* Light Green - Good buffer */
+}
+
+.buffer-indicator.poor {
+  background-color: #ff9800; /* Orange - Low buffer */
+  animation: pulse-orange 1.5s infinite;
+}
+
+.buffer-indicator.critical {
+  background-color: #f44336; /* Red - Very low buffer */
+  animation: pulse-red 1.5s infinite;
 }
 
 .buffer-indicator.stalling,
 .buffer-indicator.fatal {
-  background-color: #f44336; /* Red */
+  background-color: #d32f2f; /* Dark Red - Error states */
   animation: pulse-red 1.5s infinite;
 }
 
@@ -106,4 +120,38 @@
 html.dark .n-card {
   background-color: var(--n-color);
   border: 1px solid var(--n-border-color);
+}
+
+/* Buffer indicator pulse animations */
+@keyframes pulse-red {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-orange {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-yellow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
 }
