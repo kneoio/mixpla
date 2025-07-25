@@ -28,7 +28,7 @@ export const useStationStore = defineStore('station', {
     statusText: 'Loading stations...',
     stationName: 'Radio',
     isAsleep: false,
-    isWaitingForCurator: false,
+
     isWarmingUp: false,
     isBroadcasting: false,
     bufferStatus: 'ok',
@@ -203,7 +203,7 @@ export const useStationStore = defineStore('station', {
           this.nowPlaying = '';
           this.statusText = 'Redirecting...';
           this.isAsleep = false;
-          this.isWaitingForCurator = false;
+
           this.isWarmingUp = false;
           this.isBroadcasting = false;
           
@@ -266,17 +266,20 @@ export const useStationStore = defineStore('station', {
         this.stationName = currentStation?.displayName || data.name || this.radioName;
         this.djName = data.djName;
         this.djStatus = data.djStatus;
-        this.isWarmingUp = false;
 
         if (data.currentStatus === 'ON_LINE' && data.currentSong === 'Waiting for curator to start the broadcast...') {
-          this.isWaitingForCurator = true;
+          this.isWarmingUp = false;
           this.statusText = 'Station is online, waiting for curator...';
           this.isAsleep = false;
           this.isBroadcasting = false;
         } else {
-          this.isWaitingForCurator = false;
           this.isAsleep = false;
           this.isBroadcasting = data.currentStatus === 'ON_LINE';
+          
+          // Stop warming animation if station is online
+          if (data.currentStatus === 'ON_LINE') {
+            this.isWarmingUp = false;
+          }
           
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
@@ -312,7 +315,7 @@ export const useStationStore = defineStore('station', {
         console.error(`Failed to fetch station status for ${this.radioName}:`, error);
         this.isWarmingUp = false;
         this.isAsleep = false;
-        this.isWaitingForCurator = false;
+
         this.isBroadcasting = false;
         this.statusText = `Error: Could not fetch station status.`;
       }
@@ -323,15 +326,9 @@ export const useStationStore = defineStore('station', {
         this.isWarmingUp = true;
         this.statusText = 'Station is warming up, please wait...';
 
-        setTimeout(() => {
-            if (this.isWarmingUp) {
-                this.isWarmingUp = false;
-            }
-        }, 10000);
-
         try {
             await apiClient.put(`/${this.radioName}/radio/wakeup`);
-            this.startPolling(true); // fast polling
+            this.startPolling(true); 
         } catch (error) {
             console.error('Error waking up station:', error);
             this.isWarmingUp = false;
@@ -339,20 +336,22 @@ export const useStationStore = defineStore('station', {
         }
     },
 
-    setStation(newStationName) {
-      if (this.stations.some(s => s.name === newStationName && s.type !== 'auth') && this.radioName !== newStationName) {
-        this.radioName = newStationName;
-        storageService.saveLastStation(newStationName);
+    setStation(station) {
+      const stationName = typeof station === 'string' ? station : station.name;
+      const stationData = typeof station === 'object' ? station : this.stations.find(s => s.name === stationName);
+      
+      if (stationName && this.radioName !== stationName) {
+        this.radioName = stationName;
+        storageService.saveLastStation(stationName);
         
-        this.stationName = newStationName.charAt(0).toUpperCase() + newStationName.slice(1);
-        this.stationColor = null; // Reset to neutral color
+        this.stationName = stationData?.displayName || stationName.charAt(0).toUpperCase() + stationName.slice(1);
+        this.stationColor = stationData?.color || null;
         this.isAsleep = false;
-        this.isWaitingForCurator = false;
-        this.isWarmingUp = true; // Set to warming up state for gray color
+
+        this.isWarmingUp = true; 
         this.isBroadcasting = false;
-        this.djName = null;
-        this.djStatus = null;
-        this.nowPlaying = 'Loading...'; 
+        this.djName = null;        this.djStatus = null;
+        this.nowPlaying = ''; 
         this.statusText = 'Loading station information...';
         
         this.startPolling();

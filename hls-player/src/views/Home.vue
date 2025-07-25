@@ -43,7 +43,7 @@ const {
   stations,
   radioName,
   isAsleep,
-  isWaitingForCurator,
+
   isWarmingUp,
   bufferStatus,
   dynamicBorderStyle: storeDynamicBorderStyle,
@@ -56,90 +56,43 @@ onMounted(async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const radioParam = urlParams.get('radio');
 
-  // Wait for authentication to complete if needed
-  const authStore = useAuthStore();
-  if (authStore.isInitialized === false) {
-    await new Promise(resolve => {
-      const checkAuth = setInterval(() => {
-        if (authStore.isInitialized) {
-          clearInterval(checkAuth);
-          resolve();
-        }
-      }, 100);
-    });
-  }
+  await stationStore.fetchStations(false);
 
   if (radioParam) {
     const previousStation = localStorage.getItem('lastStation');
     localStorage.removeItem('lastStation');
 
-    stationStore.setRadioName(radioParam);
+    stationStore.radioName = radioParam;
 
-    const checkStationInterval = setInterval(async () => {
-      await stationStore.fetchStations(true);
-      const stations = stationStore.stations;
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_BASE_URL || window.location.origin}/${radioParam.toLowerCase()}/radio/status`;
+      const response = await fetch(apiUrl);
 
-      const targetStation = stations.value?.find(s => s.name.toLowerCase() === radioParam.toLowerCase());
+      if (response.ok) {
+        const stationData = await response.json();
 
-      if (targetStation) {
-        await stationStore.setStation(targetStation);
-        clearInterval(checkStationInterval);
+        const apiStation = {
+          name: radioParam.toLowerCase(),
+          color: stationData.color || '#FFA500',
+          currentStatus: stationData.currentStatus || 'UNKNOWN',
+          type: 'api'
+        };
+
+        await stationStore.setStation(apiStation);
+        stationStore.startPolling();
       } else {
-        try {
-          const apiUrl = `${import.meta.env.VITE_API_BASE_URL || window.location.origin}/${radioParam.toLowerCase()}/radio/status`;
-          const response = await fetch(apiUrl);
-
-          if (response.ok) {
-            const stationData = await response.json();
-
-            const apiStation = {
-              name: radioParam.toLowerCase(),
-              color: stationData.color || '#FFA500',
-              currentStatus: stationData.currentStatus || 'UNKNOWN',
-              type: 'api'
-            };
-
-            stationStore.addCustomStation(apiStation);
-            await stationStore.setStation(apiStation);
-            clearInterval(checkStationInterval);
-          } else {
-            throw new Error(`API returned ${response.status}`);
-          }
-        } catch (error) {
-          stationStore.radioName = radioParam.toLowerCase();
-          stationStore.stationName = radioParam.toLowerCase();
-          stationStore.statusText = `Station '${radioParam}' not found. Available stations: ${stations.value?.filter(s => s.type !== 'auth').map(s => s.name).join(', ') || 'None'}`;
-          stationStore.isAsleep = false;
-          stationStore.isWaitingForCurator = false;
-          stationStore.isWarmingUp = false;
-          stationStore.isBroadcasting = false;
-          stationStore.stationColor = '#ef4444'; 
-          clearInterval(checkStationInterval);
-        }
+        throw new Error(`API returned ${response.status}`);
       }
-    }, 500);
+    } catch (error) {
+      stationStore.radioName = radioParam.toLowerCase();
+      stationStore.stationName = radioParam.toLowerCase();
+      stationStore.statusText = `Station '${radioParam}' not found`;
+      stationStore.isAsleep = false;
 
-    const customStation = localStorage.getItem( 'customStation' );
-    if ( customStation ) {
-      try {
-        const parsedStation = JSON.parse( customStation );
-        stationStore.removeCustomStation( parsedStation.name );
-        localStorage.removeItem( 'customStation' );
-      } catch ( e ) {
-        localStorage.removeItem( 'customStation' );
-      }
-    }
-  } else {
-    await stationStore.fetchStations(false);
-    const customStation = localStorage.getItem( 'customStation' );
-    if ( customStation ) {
-      try {
-        const parsedStation = JSON.parse( customStation );
-        stationStore.removeCustomStation( parsedStation.name );
-        localStorage.removeItem( 'customStation' );
-      } catch ( e ) {
-        localStorage.removeItem( 'customStation' );
-      }
+      stationStore.isWarmingUp = false;
+      stationStore.isBroadcasting = false;
+      stationStore.stationColor = '#ef4444';
+      stationStore.startPolling();
     }
   }
 } );
@@ -148,7 +101,7 @@ const mainStations = computed( () => stations.value.slice( 0, 4 ) );
 const dropdownStations = computed( () => stations.value.slice( 4 ) );
 
 const getStationStyle = ( station ) => {
-  const activeStatuses = ['ONLINE', 'BROADCASTING', 'WAITING_FOR_CURATOR'];
+  const activeStatuses = ['ONLINE', 'BROADCASTING'];
   if ( activeStatuses.includes( station.currentStatus ) ) {
     return { color: station.color };
   }
@@ -180,7 +133,7 @@ const isDropdownStationActive = computed( () =>
 
 const indicatorClass = computed( () => {
   if ( isAsleep.value ) return 'waiting';
-  if ( isWaitingForCurator.value ) return 'waiting';
+
   if ( isWarmingUp.value ) return 'waiting';
   return bufferStatus.value;
 } );

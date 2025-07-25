@@ -15,7 +15,7 @@
         <div class="now-playing-ticker"><span>{{ nowPlaying }}</span></div>
       </div>
       <div class="controls">
-        <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWarmingUp || isWaitingForCurator">
+        <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWarmingUp">
           <template #icon>
             <n-icon :component="playIcon" />
           </template>
@@ -54,7 +54,7 @@ const uiStore = useUiStore();
 const stationStore = useStationStore();
 const segmentStatsStore = useSegmentStatsStore();
 const message = useMessage();
-const { radioName, stationName, statusText, nowPlaying, isAsleep, isWaitingForCurator, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
+const { radioName, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
 
 
 const isDebugMode = computed(() => {
@@ -139,7 +139,7 @@ watch(
   () => ({
     name: radioName.value,
     asleep: isAsleep.value,
-    waiting: isWaitingForCurator.value,
+
   }),
   (newStatus, oldStatus) => {
 
@@ -177,9 +177,7 @@ const togglePlay = () => {
     stationStore.wakeUpStation();
     return;
   }
-  if (isWaitingForCurator.value) {
-    return;
-  }
+
   if (!audioPlayer.value) return;
 
 
@@ -324,10 +322,8 @@ const initializeHls = (radioName) => {
             timestamp: new Date().toISOString()
           });
         }
-        
-        // Attempt recovery with exponential backoff
+                
         if (hls && !attemptRecovery(hls, errorType)) {
-          // If recovery failed after max attempts, trigger a full reload
           console.error('[HLS] Recovery failed, triggering full reload');
           if (hls) hls.destroy();
           initializeHls(radioName);
@@ -415,12 +411,10 @@ const initializeHls = (radioName) => {
                       data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'media' : 'fatal';
 
       if (!attemptRecovery(hls, errorType)) {
-        // If recovery failed after max attempts, trigger a full reload
         console.error(`[HLS] Recovery failed for ${errorType} error, triggering full reload`);
         if (hls) hls.destroy();
         initializeHls(radioName);
-      } else {
-        // Try specific recovery based on error type
+      } else {        
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           console.error("Network error, attempting recovery...");
           hls.startLoad();
@@ -481,7 +475,6 @@ const initializeHls = (radioName) => {
           }
         }
         
-        // Set buffer status based on buffer health
         if (bufferAhead < 2) {
           stationStore.setBufferStatus('critical');
         } else if (bufferAhead < 5) {
@@ -497,20 +490,17 @@ const initializeHls = (radioName) => {
     }
   };
   
-  // Check buffer health every 2 seconds
+
   const bufferHealthInterval = setInterval(checkBufferHealth, 2000);
   
-  // Audio player event debugging for song jumping (debug mode only)
   if (isDebugMode) {
     let lastCurrentTime = 0;
     let lastTimeUpdate = Date.now();
     
     audioPlayer.value.addEventListener('seeking', () => {
-      // Audio seeking event
     });
     
     audioPlayer.value.addEventListener('seeked', () => {
-      // Audio seeked event
     });
     
     audioPlayer.value.addEventListener('timeupdate', () => {
@@ -519,9 +509,9 @@ const initializeHls = (radioName) => {
       const timeDiff = Math.abs(currentTime - lastCurrentTime);
       const realTimeDiff = (now - lastTimeUpdate) / 1000;
       
-      // Detect unexpected time jumps (more than 2 seconds difference from expected)
+    
       if (realTimeDiff > 0.5 && timeDiff > realTimeDiff + 2) {
-        // Unexpected time jump detected
+    
       }
       
       lastCurrentTime = currentTime;
