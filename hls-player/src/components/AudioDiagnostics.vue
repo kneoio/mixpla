@@ -15,10 +15,10 @@
     </div>
     
     <div class="terminal-content">
-      <div class="info-line">Now Playing: {{ nowPlaying || 'N/A' }} | Station: {{ stationName || 'N/A' }}</div>
+      <div class="info-line">Now Playing: {{ nowPlaying || '' }} | Station: {{ stationName || '' }}</div>
       <div class="info-line">Rate: {{ audioProperties.playbackRate }} | Duration: {{ formatTime(audioProperties.duration) }} | Time: {{ formatTime(audioProperties.currentTime) }}</div>
-      <div class="info-line">Sample Rate: {{ audioContext?.sampleRate || 'N/A' }}Hz | State: {{ audioContext?.state || 'N/A' }} | Buffer: {{ getBufferHealth() }}</div>
-      <div class="info-line">Bitrate: {{ hlsProperties.bitrate || 'N/A' }}kbps | Codec: {{ hlsProperties.codec || 'N/A' }} | Level: {{ hlsProperties.currentLevel }}</div>
+      <div class="info-line">Sample Rate: {{ audioContext?.sampleRate || '' }}Hz | State: {{ audioContext?.state || '' }} | Buffer: {{ getBufferHealth() }}</div>
+      <div class="info-line">Bitrate: {{ hlsProperties.bitrate || '' }}kbps | Codec: {{ hlsProperties.codec || '' }} | Level: {{ hlsProperties.currentLevel }}</div>
       <div class="info-line">Segments: {{ segmentStats.successfulSegments }}/{{ segmentStats.totalSegments }} ({{ segmentStats.successRate }}%) | Errors: {{ segmentStats.failedSegments }} ({{ segmentStats.errorRate }}%) | Avg Load: {{ segmentStats.averageLoadTime }}ms</div>
       <div v-if="speedTestResult" class="info-line speed-result">{{ speedTestResult }}</div>
       
@@ -147,7 +147,7 @@ const formatTime = (seconds) => {
 };
 
 const getBufferHealth = () => {
-  if (!audioPlayer) return 'N/A';
+  if (!audioPlayer) return '';
   try {
     const buffered = audioPlayer.buffered;
     if (buffered.length === 0) return 'Empty';
@@ -249,12 +249,12 @@ const testPlaybackSpeed = async () => {
 const logAudioMetadata = () => {
   addLog('=== AUDIO METADATA ===');
   addLog(`Now Playing: ${nowPlaying.value}`);
-  addLog(`Playback Rate: ${audioPlayer?.playbackRate || 'N/A'}`);
-  addLog(`Sample Rate: ${audioContext.value?.sampleRate || 'N/A'} Hz`);
-  addLog(`Audio Context State: ${audioContext.value?.state || 'N/A'}`);
+  addLog(`Playback Rate: ${audioPlayer?.playbackRate || ''}`);
+  addLog(`Sample Rate: ${audioContext.value?.sampleRate || ''} Hz`);
+  addLog(`Audio Context State: ${audioContext.value?.state || ''}`);
   addLog(`Current HLS Level: ${hlsProperties.value.currentLevel}`);
-  addLog(`Bitrate: ${hlsProperties.value.bitrate || 'N/A'} kbps`);
-  addLog(`Codec: ${hlsProperties.value.codec || 'N/A'}`);
+  addLog(`Bitrate: ${hlsProperties.value.bitrate || ''} kbps`);
+  addLog(`Codec: ${hlsProperties.value.codec || ''}`);
   
   if (audioPlayer) {
     addLog(`Audio Duration: ${formatTime(audioPlayer.duration)}`);

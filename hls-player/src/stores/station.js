@@ -19,7 +19,7 @@ export const useStationStore = defineStore('station', {
     stations: [],
     radioName: storageService.getLastStation() || null,
     stationInfo: null,
-    nowPlaying: 'N/A',
+    nowPlaying: '',
     statusPollingInterval: null,
     listPollingInterval: null,
     bufferStatus: 'healthy',
@@ -200,7 +200,7 @@ export const useStationStore = defineStore('station', {
           this.stations = [];
           this.radioName = null;
           this.stationInfo = null;
-          this.nowPlaying = 'N/A';
+          this.nowPlaying = '';
           this.statusText = 'Redirecting...';
           this.isAsleep = false;
           this.isWaitingForCurator = false;
@@ -222,7 +222,6 @@ export const useStationStore = defineStore('station', {
         }
         
         if (this.radioName) {
-          console.log('Creating fallback station entry for currently playing:', this.radioName);
           this.stations = [{
             name: this.radioName,
             displayName: this.stationName || this.radioName,
@@ -300,7 +299,6 @@ export const useStationStore = defineStore('station', {
         if (error.response && error.response.status === 404) {
             const responseText = error.response.data;
             if (typeof responseText === 'string' && responseText.includes("Radio station not broadcasting")) {
-                console.log('[Debug] Station identified as asleep.');
                 this.isWarmingUp = false;
                 this.isAsleep = true;
                 this.isBroadcasting = false;
@@ -365,7 +363,6 @@ export const useStationStore = defineStore('station', {
       const existingStation = this.stations.find(s => s.name === station.name);
       if (!existingStation) {
         this.stations.push(station);
-        console.log(`Added custom station: ${station.name}`);
       }
     },
 
@@ -399,7 +396,7 @@ export const useStationStore = defineStore('station', {
     startListPolling() { 
       const listInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_LIST_MS, 10) || 60000;
       this.listPollingInterval = setInterval(() => {
-        this.updateStationsList();
+        this.fetchStations(true);
       }, listInterval);
     },
 

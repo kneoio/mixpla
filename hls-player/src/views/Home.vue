@@ -52,11 +52,24 @@ const {
   stationColor
 } = storeToRefs( stationStore );
 
-onMounted( async () => {
-  const urlParams = new URLSearchParams( window.location.search );
-  const radioParam = urlParams.get( 'radio' );
+onMounted(async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const radioParam = urlParams.get('radio');
 
-  if ( radioParam ) {
+  // Wait for authentication to complete if needed
+  const authStore = useAuthStore();
+  if (authStore.isInitialized === false) {
+    await new Promise(resolve => {
+      const checkAuth = setInterval(() => {
+        if (authStore.isInitialized) {
+          clearInterval(checkAuth);
+          resolve();
+        }
+      }, 100);
+    });
+  }
+
+  if (radioParam) {
     const previousStation = localStorage.getItem('lastStation');
     localStorage.removeItem('lastStation');
 
@@ -66,7 +79,7 @@ onMounted( async () => {
       await stationStore.fetchStations(true);
       const stations = stationStore.stations;
 
-      const targetStation = stations.value.find(s => s.name.toLowerCase() === radioParam.toLowerCase());
+      const targetStation = stations.value?.find(s => s.name.toLowerCase() === radioParam.toLowerCase());
 
       if (targetStation) {
         await stationStore.setStation(targetStation);
@@ -74,7 +87,7 @@ onMounted( async () => {
       } else {
         try {
           const apiUrl = `${import.meta.env.VITE_API_BASE_URL || window.location.origin}/${radioParam.toLowerCase()}/radio/status`;
-          const response = await fetch( apiUrl );
+          const response = await fetch(apiUrl);
 
           if (response.ok) {
             const stationData = await response.json();
@@ -95,7 +108,7 @@ onMounted( async () => {
         } catch (error) {
           stationStore.radioName = radioParam.toLowerCase();
           stationStore.stationName = radioParam.toLowerCase();
-          stationStore.statusText = `Station '${radioParam}' not found. Available stations: ${stations.value.filter(s => s.type !== 'auth').map(s => s.name).join(', ')}`;
+          stationStore.statusText = `Station '${radioParam}' not found. Available stations: ${stations.value?.filter(s => s.type !== 'auth').map(s => s.name).join(', ') || 'None'}`;
           stationStore.isAsleep = false;
           stationStore.isWaitingForCurator = false;
           stationStore.isWarmingUp = false;

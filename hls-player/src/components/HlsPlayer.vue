@@ -194,7 +194,44 @@ const togglePlay = () => {
   }
 };
 
+// Track recovery attempts
+let recoveryAttempts = 0;
+const MAX_RECOVERY_ATTEMPTS = 3;
+let recoveryTimeout = null;
+
+const resetRecoveryState = () => {
+  recoveryAttempts = 0;
+  if (recoveryTimeout) {
+    clearTimeout(recoveryTimeout);
+    recoveryTimeout = null;
+  }
+};
+
+const attemptRecovery = (hlsInstance, errorType = 'unknown') => {
+  if (recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+    console.error(`[HLS] Max recovery attempts (${MAX_RECOVERY_ATTEMPTS}) reached for error:`, errorType);
+    resetRecoveryState();
+    return false;
+  }
+
+  recoveryAttempts++;
+  console.log(`[HLS] Recovery attempt ${recoveryAttempts}/${MAX_RECOVERY_ATTEMPTS} for ${errorType}`);
+  
+  // Exponential backoff: 500ms, 1000ms, 2000ms
+  const delay = Math.min(500 * Math.pow(2, recoveryAttempts - 1), 5000);
+  
+  recoveryTimeout = setTimeout(() => {
+    if (hlsInstance) {
+      hlsInstance.startLoad();
+    }
+  }, delay);
+  
+  return true;
+};
+
 const initializeHls = (radioName) => {
+  resetRecoveryState();
+  
   if (hls) {
     hls.destroy();
   }
@@ -249,39 +286,51 @@ const initializeHls = (radioName) => {
             startTime: startTime
           }, xhr.response);
           
-          console.log(`[SEGMENT] Loaded ${segmentType}:`, {
+          /*console.log(`[SEGMENT] Loaded ${segmentType}:`, {
             url: url,
             status: xhr.status,
             size: xhr.response?.length || 0,
             time: loadTime.toFixed(2) + 'ms'
-          });
+          });*/
         }
       });
       
       xhr.addEventListener('error', (error) => {
         const segmentType = new URL(url).pathname.endsWith('.m3u8') ? 'manifest' : 'segment';
+        const errorType = xhr.status === 404 ? '404' : 'network_error';
         
-
         if (xhr.status === 404) {
           stationStore.track404Error();
-          if (isDebugMode.value) {
-            console.error(`[404] Failed to load ${segmentType}: ${url.split('/').pop()}`);
-          }
         }
         
-
         if (isDebugMode.value) {
+          console.error(`[${errorType}] Failed to load ${segmentType}: ${url.split('/').pop()}`);
+          
           segmentStatsStore.addSegmentError({
             url: url,
             type: segmentType,
-            startTime: performance.now()
+            startTime: performance.now(),
+            status: xhr.status,
+            error: error.message,
+            recoveryAttempt: recoveryAttempts + 1,
+            timestamp: new Date().toISOString()
           }, error);
           
           console.error(`[SEGMENT] Failed to load ${segmentType}:`, {
             url: url,
             status: xhr.status,
-            error: error.message
+            error: error.message,
+            recoveryAttempt: recoveryAttempts + 1,
+            timestamp: new Date().toISOString()
           });
+        }
+        
+        // Attempt recovery with exponential backoff
+        if (hls && !attemptRecovery(hls, errorType)) {
+          // If recovery failed after max attempts, trigger a full reload
+          console.error('[HLS] Recovery failed, triggering full reload');
+          if (hls) hls.destroy();
+          initializeHls(radioName);
         }
       });
     }
@@ -318,8 +367,21 @@ const initializeHls = (radioName) => {
   });
 
   hls.on(Hls.Events.FRAG_BUFFERED, (event, data) => {
+    if (isDebugMode) {
+      console.log('[FRAG_BUFFERED] Fragment buffered:', data.frag);
+    }
+    
     if (stationStore.bufferStatus === 'stalling') {
       stationStore.setBufferStatus('ok');
+    }
+    
+    stationStore.trackSegmentLoad(true);
+    
+    if (hls && hls.media && hls.media.paused) {
+      console.log('Media is paused, attempting to play...');
+      hls.media.play().catch(e => {
+        console.error('Failed to resume playback after buffering:', e);
+      });
     }
   });
 
@@ -340,28 +402,60 @@ const initializeHls = (radioName) => {
     });
   }
 
-  hls.on(Hls.Events.ERROR, () => {
-    if (isDebugMode) {
-
+  hls.on(Hls.Events.ERROR, (event, data) => {
+    if (isDebugMode.value) {
+      console.error('[HLS ERROR]', data);
     }
     
     if (data.fatal) {
       console.error('HLS.js fatal error:', data);
       stationStore.setBufferStatus('fatal');
+      
+      const errorType = data.type === Hls.ErrorTypes.NETWORK_ERROR ? 'network' : 
+                      data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'media' : 'fatal';
 
-      switch (data.type) {
-        case Hls.ErrorTypes.NETWORK_ERROR:
-          console.error("Fatal network error, trying to recover...");
+      if (!attemptRecovery(hls, errorType)) {
+        // If recovery failed after max attempts, trigger a full reload
+        console.error(`[HLS] Recovery failed for ${errorType} error, triggering full reload`);
+        if (hls) hls.destroy();
+        initializeHls(radioName);
+      } else {
+        // Try specific recovery based on error type
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          console.error("Network error, attempting recovery...");
           hls.startLoad();
-          break;
-        case Hls.ErrorTypes.MEDIA_ERROR:
-          console.error("Fatal media error, trying to recover...");
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          console.error("Media error, attempting recovery...");
           hls.recoverMediaError();
-          break;
-        default:
-          console.error("Unrecoverable error, destroying HLS instance.");
-          hls.destroy();
-          break;
+        }
+      }
+    }
+  });
+
+  hls.on(Hls.Events.FRAG_LOAD_ERROR, (event, data) => {
+    if (isDebugMode) {
+      console.error('[FRAG_LOAD_ERROR] Failed to load fragment:', {
+        frag: data.frag,
+        response: data.response,
+        error: data.error
+      });
+    }
+    
+    stationStore.trackSegmentLoad(false);
+    
+    if (hls && hls.media) {
+      console.log('Current buffer state:', {
+        buffered: hls.media.buffered.length > 0 ? hls.media.buffered : 'empty',
+        currentTime: hls.media.currentTime,
+        readyState: hls.media.readyState,
+        networkState: hls.media.networkState
+      });
+      
+      if (hls.media.buffered.length > 0) {
+        console.log('Buffer ranges:');
+        for (let i = 0; i < hls.media.buffered.length; i++) {
+          console.log(`  ${i}: ${hls.media.buffered.start(i)} -> ${hls.media.buffered.end(i)}`);
+        }
       }
     }
   });
