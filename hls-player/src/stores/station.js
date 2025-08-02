@@ -267,17 +267,18 @@ export const useStationStore = defineStore('station', {
         this.djName = data.djName;
         this.djStatus = data.djStatus;
 
-        if (data.currentStatus === 'ON_LINE' && data.currentSong === 'Waiting for curator to start the broadcast...') {
+        const isOnlineStatus = data.currentStatus === 'ON_LINE' || data.currentStatus === 'QUEUE_SATURATED';
+        
+        if (isOnlineStatus && data.currentSong === 'Waiting for curator to start the broadcast...') {
           this.isWarmingUp = false;
           this.statusText = 'Station is online, waiting for curator...';
           this.isAsleep = false;
           this.isBroadcasting = false;
         } else {
           this.isAsleep = false;
-          this.isBroadcasting = data.currentStatus === 'ON_LINE';
+          this.isBroadcasting = isOnlineStatus;
           
-          // Stop warming animation if station is online
-          if (data.currentStatus === 'ON_LINE') {
+          if (isOnlineStatus) {
             this.isWarmingUp = false;
           }
           
@@ -286,10 +287,8 @@ export const useStationStore = defineStore('station', {
           }
             
           let displayMessageParts = [];
-          if (data.managedBy) displayMessageParts.push(`Mode: ${data.managedBy}`);
           if (data.countryCode) displayMessageParts.push(`Country: ${data.countryCode}`);
           if (data.djName) displayMessageParts.push(`DJ: ${data.djName}`);
-          if (data.currentStatus) displayMessageParts.push(`${data.currentStatus.replace(/_/g, ' ').toLowerCase()}`);
           this.statusText = displayMessageParts.join(', ');
         }
         
