@@ -17,36 +17,33 @@ export const useStationStore = defineStore('station', {
   state: () => ({
     animationIntensity: 0,
     stations: [],
-    radioName: storageService.getLastStation() || null,
-    stationInfo: null,
-    nowPlaying: '',
-    statusPollingInterval: null,
-    listPollingInterval: null,
+    radioName: storageService.getLastStation() || '',
+    radioSlug: '',
+    stationName: '',
     stationColor: null,
-    statusText: 'Loading stations...',
-    stationName: 'Radio',
-    isAsleep: false,
-
-    isWarmingUp: false,
-    isBroadcasting: false,
-    bufferStatus: 'ok',
+    stationInfo: null,
     djName: null,
     djStatus: null,
-    error404: {
-      enabled: false,
-      count: 0
+    nowPlaying: '',
+    isAsleep: false,
+    isBroadcasting: false,
+    isWarmingUp: false,
+    statusText: 'Loading...',
+    pollingInterval: null,
+    listPollingInterval: null,
+    bufferStatus: {
+      level: 0,
+      health: 'good'
     },
-    segmentErrors: {
-      total: 0,
-      lastError: null,
-      recentErrors: [],
-      errorRate: 0,
-      lastHour: 0
-    },
+    authEntry: null,
+    track404: false,
+    count404: 0,
     segmentStats: {
       total: 0,
       success: 0,
-      failed: 0
+      errors: 0,
+      errorRate: 0,
+      lastReset: Date.now()
     }
   }),
 
@@ -175,12 +172,37 @@ export const useStationStore = defineStore('station', {
         this.updateAuthEntry();
         
         if (!skipAutoSelect) {
-          const stationExists = this.stations.some(s => s.name === this.radioName && s.type !== 'auth');
+          const urlParams = new URLSearchParams(window.location.search);
+          const radioParam = urlParams.get('radio');
+          
+          let targetStationName = this.radioName;
+          
+          if (radioParam) {
+            const stationBySlug = this.stations.find(s => s.slugName === radioParam && s.type !== 'auth');
+            const stationByName = this.stations.find(s => s.name === radioParam && s.type !== 'auth');
+            const targetStation = stationBySlug || stationByName;
+            
+            if (targetStation) {
+              targetStationName = targetStation.name;
+            } else {
+              targetStationName = radioParam;
+            }
+          }
+          
+          const stationExists = this.stations.some(s => s.name === targetStationName && s.type !== 'auth');
 
-          if (!this.radioName || !stationExists) {
+          if (!targetStationName || !stationExists) {
             const realStations = this.stations.filter(s => s.type !== 'auth');
             if (realStations.length > 0) {
               this.radioName = realStations[0].name;
+              this.radioSlug = realStations[0].slugName || '';
+              storageService.saveLastStation(this.radioName);
+            }
+          } else {
+            this.radioName = targetStationName;
+            const currentStation = this.stations.find(s => s.name === targetStationName && s.type !== 'auth');
+            this.radioSlug = currentStation?.slugName || '';
+            if (radioParam) {
               storageService.saveLastStation(this.radioName);
             }
           }
@@ -254,18 +276,18 @@ export const useStationStore = defineStore('station', {
     },
 
     async fetchStationInfo() {
-      if (!this.radioName) return;
+      if (!this.radioSlug) return;
 
       try {
-        const response = await apiClient.get(`/${this.radioName}/radio/status`);
+        const response = await apiClient.get(`/${this.radioSlug}/radio/status`);
         const data = response.data;
         this.stationInfo = data;
-        const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
+        const currentStation = this.stations.find(s => (s.slugName || s.name) === this.radioSlug && s.type !== 'auth');
         this.stationName = currentStation?.displayName || this.stationName || data.name || this.radioName;
         this.djName = data.djName;
         this.djStatus = data.djStatus;
 
-        const isOnlineStatus = data.currentStatus === 'ON_LINE' || data.currentStatus === 'QUEUE_SATURATED';
+        const isOnlineStatus = data.currentStatus === 'ON_LINE' || data.currentStatus === 'QUEUE_SATURATED' || data.currentStatus === 'SYSTEM ERROR';
         
         if (isOnlineStatus && data.currentSong === 'Waiting for curator to start the broadcast...') {
           this.isWarmingUp = false;
@@ -319,12 +341,12 @@ export const useStationStore = defineStore('station', {
     },
 
     async wakeUpStation() {
-        if (!this.radioName) return;
+        if (!this.radioSlug) return;
         this.isWarmingUp = true;
         this.statusText = 'Station is warming up, please wait...';
 
         try {
-            await apiClient.put(`/${this.radioName}/radio/wakeup`);
+            await apiClient.put(`/${this.radioSlug}/radio/wakeup`);
             this.startPolling(true); 
         } catch (error) {
             console.error('Error waking up station:', error);
@@ -339,9 +361,10 @@ export const useStationStore = defineStore('station', {
       
       if (stationName && this.radioName !== stationName) {
         this.radioName = stationName;
+        this.radioSlug = stationData?.slugName || '';
         storageService.saveLastStation(stationName);
         
-        this.stationName = stationData?.displayName || stationName.charAt(0).toUpperCase() + stationName.slice(1);
+        this.stationName = stationData?.displayName || stationName;
         this.stationColor = stationData?.color || null;
         this.isAsleep = false;
 

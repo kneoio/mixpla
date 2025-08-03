@@ -56,7 +56,6 @@ import { NButton, NIcon, NSelect, NSlider, useMessage } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Share from '@vicons/tabler/es/Share';
-import Refresh from '@vicons/tabler/es/Refresh';
 import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
 
@@ -69,8 +68,7 @@ const userPaused = ref(false);
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const segmentStatsStore = useSegmentStatsStore();
-const message = useMessage();
-const { radioName, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
+const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
 
 const isDebugMode = computed(() => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -149,6 +147,7 @@ watch(curatorText, (newText, oldText) => {
 watch(
   () => ({
     name: radioName.value,
+    slug: radioSlug.value,
     asleep: isAsleep.value,
 
   }),
@@ -165,7 +164,7 @@ watch(
     }
 
 
-    if (newStatus.name && !newStatus.asleep && !newStatus.waiting) {
+    if (newStatus.slug && !newStatus.asleep && !newStatus.waiting) {
       const nameChanged = oldStatus ? newStatus.name !== oldStatus.name : true;
       const justWokeUp = oldStatus ? oldStatus.asleep && !newStatus.asleep : false;
       const justBecameReady = oldStatus ? oldStatus.waiting && !newStatus.waiting : false;
@@ -174,7 +173,7 @@ watch(
         console.log(`[Player] Station ${newStatus.name} is now playable. Initializing HLS.`);
         const delay = justWokeUp ? 2500 : 0;
         setTimeout(() => {
-          initializeHls(newStatus.name);
+          initializeHls(newStatus.slug);
         }, delay);
       }
     }
@@ -238,7 +237,7 @@ const attemptRecovery = (hlsInstance, errorType = 'unknown') => {
   return true;
 };
 
-const initializeHls = (radioName) => {
+const initializeHls = (radioSlug) => {
   resetRecoveryState();
   
   if (hls) {
@@ -250,7 +249,7 @@ const initializeHls = (radioName) => {
   }
 
 
-  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${radioName}/radio/stream.m3u8`;
+  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${radioSlug}/radio/stream.m3u8`;
 
   if (isDebugMode.value) {
     segmentStatsStore.resetStats();
@@ -337,7 +336,7 @@ const initializeHls = (radioName) => {
         if (hls && !attemptRecovery(hls, errorType)) {
           console.error('[HLS] Recovery failed, triggering full reload');
           if (hls) hls.destroy();
-          initializeHls(radioName);
+          initializeHls(radioSlug.value);
         }
       });
     }
@@ -424,7 +423,7 @@ const initializeHls = (radioName) => {
       if (!attemptRecovery(hls, errorType)) {
         console.error(`[HLS] Recovery failed for ${errorType} error, triggering full reload`);
         if (hls) hls.destroy();
-        initializeHls(radioName);
+        initializeHls(radioSlug.value);
       } else {        
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           console.error("Network error, attempting recovery...");
