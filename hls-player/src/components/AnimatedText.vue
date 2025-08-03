@@ -119,9 +119,9 @@ onBeforeUnmount(() => {
   background: linear-gradient(
     45deg,
     var(--station-color),
-    #ff6b6b,
-    #4ecdc4,
-    #45b7d1,
+    #ea2626,
+    #e3d241,
+    #6c47f8,
     var(--station-color)
   );
   background-size: 300% 300%;

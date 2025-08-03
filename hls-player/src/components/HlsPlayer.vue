@@ -204,7 +204,6 @@ const togglePlay = () => {
   }
 };
 
-// Track recovery attempts
 let recoveryAttempts = 0;
 const MAX_RECOVERY_ATTEMPTS = 3;
 let recoveryTimeout = null;
