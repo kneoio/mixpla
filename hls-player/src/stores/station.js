@@ -22,7 +22,6 @@ export const useStationStore = defineStore('station', {
     nowPlaying: '',
     statusPollingInterval: null,
     listPollingInterval: null,
-    bufferStatus: 'healthy',
     stationColor: null,
     statusText: 'Loading stations...',
     stationName: 'Radio',
