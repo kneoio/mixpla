@@ -12,7 +12,11 @@
       </div>
 
       <div class="now-playing-info" :style="darkThemeTextStyle">
-        <div class="now-playing-ticker"><span>{{ nowPlaying }}</span></div>
+        <AnimatedText 
+          :text="nowPlaying" 
+          :animation-type="titleAnimationType" 
+          :animation-speed="animationSpeed" 
+        />
       </div>
       <div class="controls">
         <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWarmingUp">
@@ -48,25 +52,25 @@ import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
 import { useSegmentStatsStore } from '../stores/segmentStats';
 import { storeToRefs } from 'pinia';
-import { NButton, NIcon, useMessage } from 'naive-ui';
+import { NButton, NIcon, NSelect, NSlider, useMessage } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Share from '@vicons/tabler/es/Share';
+import Refresh from '@vicons/tabler/es/Refresh';
 import Hls from 'hls.js';
-
+import AnimatedText from './AnimatedText.vue';
 
 const audioPlayer = ref(null);
 
-
 let hls = null;
 const isPlaying = ref(false);
+const userPaused = ref(false);
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const segmentStatsStore = useSegmentStatsStore();
 const message = useMessage();
 const { radioName, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
-
 
 const isDebugMode = computed(() => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -77,12 +81,10 @@ const displayedCuratorText = ref('');
 let typingTimeout = null;
 let retypeInterval = null;
 
-
 let audioCtx = null;
 let analyser = null;
 let source = null;
 let animationFrameId = null;
-
 
 const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
 
@@ -94,7 +96,6 @@ const curatorText = computed(() => {
   }
   return null;
 });
-
 
 const dynamicColorStyle = computed(() => {
   const color = stationColor.value || (uiStore.theme === 'dark' ? '#FFFFFF' : '#000000');
@@ -110,7 +111,6 @@ const darkThemeTextStyle = computed(() => {
   }
   return {};
 });
-
 
 const startTypingAnimation = (text) => {
   if (typingTimeout) clearTimeout(typingTimeout);
@@ -182,7 +182,6 @@ watch(
   { deep: true, immediate: true }
 );
 
-
 const togglePlay = () => {
   if (isAsleep.value) {
     stationStore.wakeUpStation();
@@ -197,8 +196,10 @@ const togglePlay = () => {
   }
 
   if (audioPlayer.value.paused) {
+    userPaused.value = false;
     audioPlayer.value.play().catch(e => console.error('Play error:', e));
   } else {
+    userPaused.value = true;
     audioPlayer.value.pause();
   }
 };
@@ -384,8 +385,8 @@ const initializeHls = (radioName) => {
     
     stationStore.trackSegmentLoad(true);
     
-    if (hls && hls.media && hls.media.paused) {
-      console.log('Media is paused, attempting to play...');
+    if (hls && hls.media && hls.media.paused && !userPaused.value) {
+      console.log('Media is paused (not by user), attempting to play...');
       hls.media.play().catch(e => {
         console.error('Failed to resume playback after buffering:', e);
       });
@@ -650,6 +651,32 @@ onBeforeUnmount(() => {
     audioCtx.close();
   }
 });
+
+const titleAnimationType = ref('static');
+const animationSpeed = ref(1);
+const animationEnabled = ref(false);
+
+const processServerPayload = (payload) => {
+  if (!payload || !Array.isArray(payload) || payload.length === 0) {
+    return;
+  }
+
+  const stationData = payload[0];
+  const animation = stationData?.animation;
+  
+  if (animation) {
+    if (animation.enabled !== undefined) {
+      animationEnabled.value = animation.enabled;
+    }
+    if (animation.type) {
+      titleAnimationType.value = animation.type;
+    }
+    if (animation.speed !== undefined) {
+      animationSpeed.value = animation.speed;
+    }
+  }
+};
+
 </script>
 
 <style scoped>
