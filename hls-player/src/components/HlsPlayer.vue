@@ -26,6 +26,16 @@
       <div class="station-status">
         <span>{{ statusText }}</span>
       </div>
+      <n-button 
+        @click="shareWithFriend" 
+        class="share-button"
+        circle
+        secondary
+      >
+        <template #icon>
+          <n-icon><Share /></n-icon>
+        </template>
+      </n-button>
     </div>
 
 
@@ -41,6 +51,7 @@ import { storeToRefs } from 'pinia';
 import { NButton, NIcon, useMessage } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
+import Share from '@vicons/tabler/es/Share';
 import Hls from 'hls.js';
 
 
@@ -518,17 +529,7 @@ const initializeHls = (radioName) => {
       lastTimeUpdate = now;
     });
     
-    audioPlayer.value.addEventListener('ended', () => {
-      // Audio ended event
-    });
-    
-    audioPlayer.value.addEventListener('stalled', () => {
-      // Audio stalled event
-    });
-    
-    audioPlayer.value.addEventListener('suspend', () => {
-      // Audio suspend event
-    });
+
   }
 };
 
@@ -611,6 +612,31 @@ onMounted(() => {
   audio.addEventListener('ended', onPauseOrEnd);
 });
 
+const shareWithFriend = async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const radioName = urlParams.get('radio') || 'aizoo';
+  const shareUrl = `https://mixpla.kneo.io/?radio=${radioName}`;
+  
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: `Listen to ${stationStore.stationName || radioName}`,
+        text: `Check out this radio station: ${stationStore.stationName || radioName}`,
+        url: shareUrl
+      });
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
+    }
+  } catch (error) {
+    console.error('Error sharing:', error);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch (clipboardError) {
+      console.error('Unable to share or copy link');
+    }
+  }
+};
+
 onBeforeUnmount(() => {
   if (hls) {
     hls.destroy();
@@ -664,6 +690,21 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: #aaa;
   min-height: 1em; 
+}
+
+.share-button {
+  margin-top: 10px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #888 !important;
+  transition: all 0.3s ease;
+}
+
+.share-button:hover {
+  background: transparent !important;
+  transform: translateY(-1px);
+  box-shadow: none !important;
 }
 
 .curator-info {

@@ -99,7 +99,7 @@ import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
 import { useAuthStore } from './stores/auth';
 import { useStationStore } from './stores/station';
-import { useRadioStatusStore } from './stores/radioStatus';
+
 import { storeToRefs } from 'pinia';
 import { VERSION } from './config/version';
 import AudioDiagnostics from './components/AudioDiagnostics.vue';
@@ -189,7 +189,7 @@ const cancelMessage = () => {
 const uiStore = useUiStore();
 const authStore = useAuthStore();
 const stationStore = useStationStore();
-const radioStatusStore = useRadioStatusStore();
+
 const { theme } = storeToRefs(uiStore);
 const { radioName } = storeToRefs(stationStore);
 

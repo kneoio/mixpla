@@ -263,7 +263,7 @@ export const useStationStore = defineStore('station', {
         const data = response.data;
         this.stationInfo = data;
         const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
-        this.stationName = currentStation?.displayName || data.name || this.radioName;
+        this.stationName = currentStation?.displayName || this.stationName || data.name || this.radioName;
         this.djName = data.djName;
         this.djStatus = data.djStatus;
 
@@ -306,7 +306,7 @@ export const useStationStore = defineStore('station', {
                 this.isBroadcasting = false;
                 this.statusText = 'Station is asleep. Click to wake it up.';
                 const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
-                this.stationName = currentStation?.displayName || this.radioName;
+                this.stationName = currentStation?.displayName || this.stationName || this.radioName;
                 this.stopPolling();
                 return;
             }
