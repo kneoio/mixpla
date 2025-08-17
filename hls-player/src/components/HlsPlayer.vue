@@ -14,12 +14,12 @@
       <div class="now-playing-info" :style="darkThemeTextStyle">
         <AnimatedText 
           :text="nowPlaying" 
-          :animation-type="titleAnimationType" 
-          :animation-speed="animationSpeed" 
+          :animation-type="titleAnimation.enabled ? titleAnimation.type : 'static'" 
+          :animation-speed="titleAnimation.speed" 
         />
       </div>
       <div class="controls">
-        <n-button @click="togglePlay" type="primary" circle strong size="large" :disabled="isWarmingUp">
+        <n-button @click="togglePlay" type="primary" circle strong size="large" :loading="isWarmingUp">
           <template #icon>
             <n-icon :component="playIcon" />
           </template>
@@ -68,7 +68,7 @@ const userPaused = ref(false);
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const segmentStatsStore = useSegmentStatsStore();
-const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor } = storeToRefs(stationStore);
+const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor, titleAnimation } = storeToRefs(stationStore);
 
 const isDebugMode = computed(() => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -187,8 +187,12 @@ const togglePlay = () => {
     return;
   }
 
-  if (!audioPlayer.value) return;
+  if (isWarmingUp.value) {
+    stationStore.wakeUpStation();
+    return;
+  }
 
+  if (!audioPlayer.value) return;
 
   if (audioCtx && audioCtx.state === 'suspended') {
     audioCtx.resume();
@@ -650,30 +654,6 @@ onBeforeUnmount(() => {
   }
 });
 
-const titleAnimationType = ref('static');
-const animationSpeed = ref(1);
-const animationEnabled = ref(false);
-
-const processServerPayload = (payload) => {
-  if (!payload || !Array.isArray(payload) || payload.length === 0) {
-    return;
-  }
-
-  const stationData = payload[0];
-  const animation = stationData?.animation;
-  
-  if (animation) {
-    if (animation.enabled !== undefined) {
-      animationEnabled.value = animation.enabled;
-    }
-    if (animation.type) {
-      titleAnimationType.value = animation.type;
-    }
-    if (animation.speed !== undefined) {
-      animationSpeed.value = animation.speed;
-    }
-  }
-};
 
 </script>
 

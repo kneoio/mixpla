@@ -44,6 +44,11 @@ export const useStationStore = defineStore('station', {
       errors: 0,
       errorRate: 0,
       lastReset: Date.now()
+    },
+    titleAnimation: {
+      type: 'static',
+      speed: 1,
+      enabled: false
     }
   }),
 
@@ -202,6 +207,17 @@ export const useStationStore = defineStore('station', {
             this.radioName = targetStationName;
             const currentStation = this.stations.find(s => s.name === targetStationName && s.type !== 'auth');
             this.radioSlug = currentStation?.slugName || '';
+            
+            this.stationName = currentStation?.displayName || targetStationName;
+            this.stationColor = currentStation?.color || null;
+            this.isAsleep = false;
+            this.isWarmingUp = true;
+            this.isBroadcasting = false;
+            this.djName = null;
+            this.djStatus = null;
+            this.nowPlaying = '';
+            this.statusText = 'Loading station information...';
+            
             if (radioParam) {
               storageService.saveLastStation(this.radioName);
             }
@@ -241,12 +257,29 @@ export const useStationStore = defineStore('station', {
           return;
         }
         
-        if (this.radioName) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const radioParam = urlParams.get('radio');
+        
+        if (this.radioName || radioParam) {
+          const targetStationName = radioParam || this.radioName;
+          
+          this.radioName = targetStationName;
+          this.radioSlug = '';
+          this.stationName = this.stationName || targetStationName;
+          this.stationColor = this.stationColor || '#6b7280';
+          this.isAsleep = false;
+          this.isWarmingUp = true;
+          this.isBroadcasting = false;
+          this.djName = null;
+          this.djStatus = null;
+          this.nowPlaying = '';
+          this.statusText = 'Loading station information...';
+          
           this.stations = [{
-            name: this.radioName,
-            displayName: this.stationName || this.radioName,
-            color: this.stationColor || '#6b7280',
-            currentStatus: this.isBroadcasting ? 'ON_LINE' : 'OFFLINE',
+            name: targetStationName,
+            displayName: this.stationName,
+            color: this.stationColor,
+            currentStatus: 'OFFLINE',
             type: 'station'
           }];
           
@@ -269,6 +302,13 @@ export const useStationStore = defineStore('station', {
           
           this.stations.push(authEntry);
           this.statusText = 'Limited station list (connection issue).';
+          
+          if (radioParam) {
+            storageService.saveLastStation(targetStationName);
+          }
+          
+          this.startPolling();
+          this.startListPolling();
         } else {
           this.statusText = 'Could not load station list.';
         }
@@ -316,6 +356,14 @@ export const useStationStore = defineStore('station', {
           this.stationColor = data.color.length === 9 ? data.color.substring(0, 7) : data.color;
         } else {
           this.stationColor = null;
+        }
+        
+        if (data.animation) {
+          this.titleAnimation = {
+            type: data.animation.type || 'static',
+            speed: data.animation.speed || 1,
+            enabled: data.animation.enabled || false
+          };
         }
       } catch (error) {
         if (error.response && error.response.status === 404) {

@@ -6,7 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const proxyTarget = env.VITE_PROXY_TARGET || 'https://bratan.online';
+  const proxyTarget = env.VITE_PROXY_TARGET || 'https://mixpla.online';
 
   return {
     plugins: [
