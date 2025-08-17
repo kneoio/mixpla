@@ -144,41 +144,18 @@ watch(curatorText, (newText, oldText) => {
   }
 });
 
+// Initialize HLS as soon as slug exists and whenever it changes.
 watch(
-  () => ({
-    name: radioName.value,
-    slug: radioSlug.value,
-    asleep: isAsleep.value,
-
-  }),
-  (newStatus, oldStatus) => {
-
-    if (newStatus.asleep || newStatus.waiting) {
-      if (hls) {
-        console.log(`[Player] Station ${newStatus.name} is not playable. Destroying HLS instance.`);
-        hls.destroy();
-        hls = null;
-        isPlaying.value = false;
-      }
-      return;
-    }
-
-
-    if (newStatus.slug && !newStatus.asleep && !newStatus.waiting) {
-      const nameChanged = oldStatus ? newStatus.name !== oldStatus.name : true;
-      const justWokeUp = oldStatus ? oldStatus.asleep && !newStatus.asleep : false;
-      const justBecameReady = oldStatus ? oldStatus.waiting && !newStatus.waiting : false;
-
-      if (nameChanged || justWokeUp || justBecameReady) {
-        console.log(`[Player] Station ${newStatus.name} is now playable. Initializing HLS.`);
-        const delay = justWokeUp ? 2500 : 0;
-        setTimeout(() => {
-          initializeHls(newStatus.slug);
-        }, delay);
-      }
+  () => radioSlug.value,
+  (newSlug, oldSlug) => {
+    if (!newSlug) return;
+    const slugChanged = !oldSlug || newSlug !== oldSlug;
+    if (slugChanged) {
+      console.log(`[Player] Initializing HLS for slug: ${newSlug}`);
+      initializeHls(newSlug);
     }
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 );
 
 const togglePlay = () => {

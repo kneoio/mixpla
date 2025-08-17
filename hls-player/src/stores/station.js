@@ -226,6 +226,22 @@ export const useStationStore = defineStore('station', {
           this.startListPolling(); 
         }
 
+        if (skipAutoSelect) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const radioParam = urlParams.get('radio');
+          if (radioParam && !this.radioSlug) {
+            const stationBySlug = this.stations.find(s => s.slugName === radioParam && s.type !== 'auth');
+            const stationByName = this.stations.find(s => s.name === radioParam && s.type !== 'auth');
+            const targetStation = stationBySlug || stationByName;
+            if (targetStation) {
+              this.radioName = targetStation.name;
+              this.radioSlug = targetStation.slugName || '';
+              this.stationName = targetStation.displayName || targetStation.name;
+              this.stationColor = targetStation.color || null;
+            }
+          }
+        }
+
       } catch (error) {
         console.error('Failed to get stations list:', error);
         
@@ -264,7 +280,7 @@ export const useStationStore = defineStore('station', {
           const targetStationName = radioParam || this.radioName;
           
           this.radioName = targetStationName;
-          this.radioSlug = '';
+          this.radioSlug = radioParam || '';
           this.stationName = this.stationName || targetStationName;
           this.stationColor = this.stationColor || '#6b7280';
           this.isAsleep = false;
