@@ -222,7 +222,7 @@ export const useStationStore = defineStore('station', {
               storageService.saveLastStation(this.radioName);
             }
           }
-          this.startPolling(); 
+          this.startPolling(true); 
           this.startListPolling(); 
         }
 
@@ -323,7 +323,7 @@ export const useStationStore = defineStore('station', {
             storageService.saveLastStation(targetStationName);
           }
           
-          this.startPolling();
+          this.startPolling(true);
           this.startListPolling();
         } else {
           this.statusText = 'Could not load station list.';
@@ -333,6 +333,7 @@ export const useStationStore = defineStore('station', {
 
     async fetchStationInfo() {
       if (!this.radioSlug) return;
+      const wasWarming = this.isWarmingUp;
 
       try {
         const response = await apiClient.get(`/${this.radioSlug}/radio/status`);
@@ -380,6 +381,9 @@ export const useStationStore = defineStore('station', {
             speed: data.animation.speed || 1,
             enabled: data.animation.enabled || false
           };
+        }
+        if (wasWarming && this.isBroadcasting) {
+          this.startPolling(false);
         }
       } catch (error) {
         if (error.response && error.response.status === 404) {

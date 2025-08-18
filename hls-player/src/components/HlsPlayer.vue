@@ -19,9 +19,9 @@
         />
       </div>
       <div class="controls">
-        <n-button @click="togglePlay" type="primary" circle strong size="large" :loading="isWarmingUp">
+        <n-button @click="togglePlay" type="primary" circle strong size="large">
           <template #icon>
-            <n-icon :component="playIcon" />
+            <n-icon :component="buttonIcon" class="btn-icon" />
           </template>
         </n-button>
       </div>
@@ -55,6 +55,7 @@ import { storeToRefs } from 'pinia';
 import { NButton, NIcon, NSelect, NSlider, useMessage } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
+import Loader from '@vicons/tabler/es/Loader';
 import Share from '@vicons/tabler/es/Share';
 import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
@@ -64,6 +65,7 @@ const audioPlayer = ref(null);
 let hls = null;
 const isPlaying = ref(false);
 const userPaused = ref(false);
+const userInitiatedPlay = ref(false);
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
@@ -84,7 +86,13 @@ let analyser = null;
 let source = null;
 let animationFrameId = null;
 
-const playIcon = computed(() => (isPlaying.value ? PlayerPause : PlayerPlay));
+const buttonIcon = computed(() => {
+  if (isWarmingUp.value) {
+    if (isPlaying.value && userInitiatedPlay.value) return PlayerPause;
+    return Loader;
+  }
+  return isPlaying.value ? PlayerPause : PlayerPlay;
+});
 
 const isTyping = ref(false);
 
@@ -152,6 +160,7 @@ watch(
     const slugChanged = !oldSlug || newSlug !== oldSlug;
     if (slugChanged) {
       console.log(`[Player] Initializing HLS for slug: ${newSlug}`);
+      userInitiatedPlay.value = false;
       initializeHls(newSlug);
     }
   },
@@ -159,14 +168,8 @@ watch(
 );
 
 const togglePlay = () => {
-  if (isAsleep.value) {
+  if (isAsleep.value || isWarmingUp.value) {
     stationStore.wakeUpStation();
-    return;
-  }
-
-  if (isWarmingUp.value) {
-    stationStore.wakeUpStation();
-    return;
   }
 
   if (!audioPlayer.value) return;
@@ -177,6 +180,7 @@ const togglePlay = () => {
 
   if (audioPlayer.value.paused) {
     userPaused.value = false;
+    userInitiatedPlay.value = true;
     audioPlayer.value.play().catch(e => console.error('Play error:', e));
   } else {
     userPaused.value = true;
@@ -333,11 +337,13 @@ const initializeHls = (radioSlug) => {
     if (isDebugMode.value) {
       console.log('[Player] Manifest parsed, attempting to play...');
     }
-    audioPlayer.value.play().catch(e => {
-      if (isDebugMode.value) {
-        console.error('Error on autoplay:', e);
-      }
-    });
+    if (!isWarmingUp.value || userInitiatedPlay.value) {
+      audioPlayer.value.play().catch(e => {
+        if (isDebugMode.value) {
+          console.error('Error on autoplay:', e);
+        }
+      });
+    }
   });
   
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
@@ -364,7 +370,7 @@ const initializeHls = (radioSlug) => {
     
     stationStore.trackSegmentLoad(true);
     
-    if (hls && hls.media && hls.media.paused && !userPaused.value) {
+    if (hls && hls.media && hls.media.paused && !userPaused.value && (!isWarmingUp.value || userInitiatedPlay.value)) {
       console.log('Media is paused (not by user), attempting to play...');
       hls.media.play().catch(e => {
         console.error('Failed to resume playback after buffering:', e);
