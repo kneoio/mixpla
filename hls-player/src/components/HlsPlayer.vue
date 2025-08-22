@@ -90,7 +90,7 @@ let source = null;
 let animationFrameId = null;
 
 const isBuffering = computed(() => {
-  return (isPlaying.value && (isStalled.value || ['stalling', 'critical', 'fatal'].includes(bufferStatus.value))) || 
+  return (isPlaying.value && ['critical', 'fatal'].includes(bufferStatus.value)) || 
          (isAsleep.value && isRetryingOffline.value);
 });
 
@@ -260,8 +260,7 @@ const attemptRecovery = (hlsInstance, errorType = 'unknown') => {
   recoveryAttempts++;
   console.log(`[HLS] Recovery attempt ${recoveryAttempts}/${MAX_RECOVERY_ATTEMPTS} for ${errorType}`);
   
-  // Exponential backoff: 500ms, 1000ms, 2000ms
-  const delay = Math.min(500 * Math.pow(2, recoveryAttempts - 1), 5000);
+  const delay = 1000;
   
   recoveryTimeout = setTimeout(() => {
     if (hlsInstance) {
@@ -512,10 +511,7 @@ const initializeHls = (radioSlug) => {
   hls.on(Hls.Events.BUFFER_STALLED, (event, data) => {
     stationStore.setBufferStatus('stalling');
     isStalled.value = true;
-    if (audioPlayer.value && !audioPlayer.value.paused) {
-      if (isDebugMode.value) console.warn('[Player] Buffer stalled, pausing to avoid backtracking');
-      audioPlayer.value.pause();
-    }
+    if (isDebugMode.value) console.warn('[Player] Buffer stalled, continuing playback');
   });
 
 
@@ -535,11 +531,11 @@ const initializeHls = (radioSlug) => {
           }
         }
         
-        if (bufferAhead < 2) {
+        if (bufferAhead < 0.5) {
           stationStore.setBufferStatus('critical');
-        } else if (bufferAhead < 5) {
+        } else if (bufferAhead < 2) {
           stationStore.setBufferStatus('poor');
-        } else if (bufferAhead < 10) {
+        } else if (bufferAhead < 5) {
           stationStore.setBufferStatus('ok');
         } else {
           stationStore.setBufferStatus('healthy');
@@ -565,7 +561,7 @@ const initializeHls = (radioSlug) => {
   }
   
 
-  const bufferHealthInterval = setInterval(checkBufferHealth, 2000);
+  const bufferHealthInterval = setInterval(checkBufferHealth, 10000);
   
   if (isDebugMode) {
     let lastCurrentTime = 0;
