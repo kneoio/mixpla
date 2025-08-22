@@ -211,7 +211,6 @@ export const useStationStore = defineStore('station', {
             this.stationName = currentStation?.displayName || targetStationName;
             this.stationColor = currentStation?.color || null;
             this.isAsleep = false;
-            this.isWarmingUp = true;
             this.isBroadcasting = false;
             this.djName = null;
             this.djStatus = null;
@@ -222,7 +221,7 @@ export const useStationStore = defineStore('station', {
               storageService.saveLastStation(this.radioName);
             }
           }
-          this.startPolling(true); 
+          this.startPolling(); 
           this.startListPolling(); 
         }
 
@@ -256,7 +255,6 @@ export const useStationStore = defineStore('station', {
           this.statusText = 'Redirecting...';
           this.isAsleep = false;
 
-          this.isWarmingUp = false;
           this.isBroadcasting = false;
           
           if (this.statusPollingInterval) {
@@ -284,7 +282,6 @@ export const useStationStore = defineStore('station', {
           this.stationName = this.stationName || targetStationName;
           this.stationColor = this.stationColor || '#6b7280';
           this.isAsleep = false;
-          this.isWarmingUp = true;
           this.isBroadcasting = false;
           this.djName = null;
           this.djStatus = null;
@@ -323,7 +320,7 @@ export const useStationStore = defineStore('station', {
             storageService.saveLastStation(targetStationName);
           }
           
-          this.startPolling(true);
+          this.startPolling();
           this.startListPolling();
         } else {
           this.statusText = 'Could not load station list.';
@@ -333,8 +330,6 @@ export const useStationStore = defineStore('station', {
 
     async fetchStationInfo() {
       if (!this.radioSlug) return;
-      const wasWarming = this.isWarmingUp;
-
       try {
         const response = await apiClient.get(`/${this.radioSlug}/radio/status`);
         const data = response.data;
@@ -347,17 +342,12 @@ export const useStationStore = defineStore('station', {
         const isOnlineStatus = data.currentStatus === 'ON_LINE' || data.currentStatus === 'QUEUE_SATURATED' || data.currentStatus === 'SYSTEM ERROR';
         
         if (isOnlineStatus && data.currentSong === 'Waiting for curator to start the broadcast...') {
-          this.isWarmingUp = false;
           this.statusText = 'Station is online, waiting for curator...';
           this.isAsleep = false;
           this.isBroadcasting = false;
         } else {
           this.isAsleep = false;
           this.isBroadcasting = isOnlineStatus;
-          
-          if (isOnlineStatus) {
-            this.isWarmingUp = false;
-          }
           
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
@@ -366,6 +356,7 @@ export const useStationStore = defineStore('station', {
           let displayMessageParts = [];
           if (data.countryCode) displayMessageParts.push(`Country: ${data.countryCode}`);
           if (data.djName) displayMessageParts.push(`DJ: ${data.djName}`);
+          if (data.djStatus && data.djStatus !== 'CONTROLLING') displayMessageParts.push('offline');
           this.statusText = displayMessageParts.join(', ');
         }
         
@@ -382,17 +373,13 @@ export const useStationStore = defineStore('station', {
             enabled: data.animation.enabled || false
           };
         }
-        if (wasWarming && this.isBroadcasting) {
-          this.startPolling(false);
-        }
       } catch (error) {
         if (error.response && error.response.status === 404) {
             const responseText = error.response.data;
             if (typeof responseText === 'string' && responseText.includes("Radio station not broadcasting")) {
-                this.isWarmingUp = false;
                 this.isAsleep = true;
                 this.isBroadcasting = false;
-                this.statusText = 'Station is asleep. Click to wake it up.';
+                this.statusText = 'Station is offline.';
                 const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
                 this.stationName = currentStation?.displayName || this.stationName || this.radioName;
                 this.stopPolling();
@@ -400,7 +387,6 @@ export const useStationStore = defineStore('station', {
             }
         }
         console.error(`Failed to fetch station status for ${this.radioName}:`, error);
-        this.isWarmingUp = false;
         this.isAsleep = false;
 
         this.isBroadcasting = false;
@@ -410,15 +396,13 @@ export const useStationStore = defineStore('station', {
 
     async wakeUpStation() {
         if (!this.radioSlug) return;
-        this.isWarmingUp = true;
-        this.statusText = 'Station is warming up, please wait...';
+        this.statusText = 'Waking up station...';
 
         try {
             await apiClient.put(`/${this.radioSlug}/radio/wakeup`);
-            this.startPolling(true); 
+            this.startPolling(); 
         } catch (error) {
             console.error('Error waking up station:', error);
-            this.isWarmingUp = false;
             this.statusText = 'Failed to wake up station.';
         }
     },

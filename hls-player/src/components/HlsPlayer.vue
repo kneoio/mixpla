@@ -21,14 +21,15 @@
       <div class="controls">
         <n-button @click="togglePlay" type="primary" circle strong size="large">
           <template #icon>
-            <n-icon :component="buttonIcon" class="btn-icon" />
+            <img v-if="isBuffering" :src="playWaitIcon" alt="buffering" class="progressIcon" />
+            <n-icon v-else :component="buttonIcon" class="btn-icon" />
           </template>
         </n-button>
       </div>
 
 
       <div class="station-status">
-        <span>{{ statusText }}</span>
+        <span>{{ displayStatusText }}</span>
       </div>
       <n-button 
         @click="shareWithFriend" 
@@ -55,10 +56,10 @@ import { storeToRefs } from 'pinia';
 import { NButton, NIcon, NSelect, NSlider, useMessage } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
-import Loader from '@vicons/tabler/es/Loader';
 import Share from '@vicons/tabler/es/Share';
 import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
+import playWaitIcon from '/play_wait.svg';
 
 const audioPlayer = ref(null);
 
@@ -66,11 +67,12 @@ let hls = null;
 const isPlaying = ref(false);
 const userPaused = ref(false);
 const userInitiatedPlay = ref(false);
+const isStalled = ref(false);
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const segmentStatsStore = useSegmentStatsStore();
-const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, isWarmingUp, djName, djStatus, stationColor, titleAnimation } = storeToRefs(stationStore);
+const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, djName, djStatus, stationColor, titleAnimation, bufferStatus } = storeToRefs(stationStore);
 
 const isDebugMode = computed(() => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -86,11 +88,12 @@ let analyser = null;
 let source = null;
 let animationFrameId = null;
 
+const isBuffering = computed(() => {
+  return (isPlaying.value && (isStalled.value || ['stalling', 'critical', 'fatal'].includes(bufferStatus.value))) || 
+         (isAsleep.value && isRetryingOffline.value);
+});
+
 const buttonIcon = computed(() => {
-  if (isWarmingUp.value) {
-    if (isPlaying.value && userInitiatedPlay.value) return PlayerPause;
-    return Loader;
-  }
   return isPlaying.value ? PlayerPause : PlayerPlay;
 });
 
@@ -107,6 +110,17 @@ const dynamicColorStyle = computed(() => {
   const color = stationColor.value || (uiStore.theme === 'dark' ? '#FFFFFF' : '#000000');
   return { color };
 });
+
+const displayStatusText = computed(() => {
+  if (isAsleep.value && isRetryingOffline.value) {
+    return 'Station is offline - Retrying every 15s (press play to stop)';
+  } else if (isAsleep.value) {
+    return 'Station is offline';
+  }
+  return statusText.value;
+});
+
+ 
 
 const darkThemeTextStyle = computed(() => {
   if (uiStore.theme === 'dark') {
@@ -167,11 +181,29 @@ watch(
   { immediate: true }
 );
 
-const togglePlay = () => {
-  if (isAsleep.value || isWarmingUp.value) {
-    stationStore.wakeUpStation();
-  }
+const startOfflineRetry = () => {
+  if (offlineRetryInterval) return;
+  
+  isRetryingOffline.value = true;
+  offlineRetryInterval = setInterval(() => {
+    if (isAsleep.value && radioSlug.value) {
+      console.log('[Player] Auto-retrying offline station...');
+      initializeHls(radioSlug.value);
+    } else if (!isAsleep.value) {
+      stopOfflineRetry();
+    }
+  }, 15000);
+};
 
+const stopOfflineRetry = () => {
+  if (offlineRetryInterval) {
+    clearInterval(offlineRetryInterval);
+    offlineRetryInterval = null;
+  }
+  isRetryingOffline.value = false;
+};
+
+const togglePlay = () => {
   if (!audioPlayer.value) return;
 
   if (audioCtx && audioCtx.state === 'suspended') {
@@ -181,16 +213,32 @@ const togglePlay = () => {
   if (audioPlayer.value.paused) {
     userPaused.value = false;
     userInitiatedPlay.value = true;
-    audioPlayer.value.play().catch(e => console.error('Play error:', e));
+    
+    if (isAsleep.value && radioSlug.value) {
+      if (isRetryingOffline.value) {
+        stopOfflineRetry();
+        console.log('[Player] Stopped offline retry');
+      } else {
+        console.log('[Player] Starting offline retry...');
+        initializeHls(radioSlug.value);
+        startOfflineRetry();
+      }
+    } else {
+      audioPlayer.value.play().catch(e => console.error('Play error:', e));
+    }
   } else {
     userPaused.value = true;
     audioPlayer.value.pause();
+    stopOfflineRetry();
   }
 };
 
 let recoveryAttempts = 0;
 const MAX_RECOVERY_ATTEMPTS = 3;
 let recoveryTimeout = null;
+
+let offlineRetryInterval = null;
+const isRetryingOffline = ref(false);
 
 const resetRecoveryState = () => {
   recoveryAttempts = 0;
@@ -246,6 +294,9 @@ const initializeHls = (radioSlug) => {
     enableWorker: true,
     maxBufferLength: 30,
     maxMaxBufferLength: 600,
+    backBufferLength: 0,
+    liveSyncDuration: 3,
+    liveMaxLatencyDuration: 10,
     fragLoadingTimeOut: 20000,
     manifestLoadingTimeOut: 10000,
     levelLoadingTimeOut: 10000,
@@ -337,7 +388,7 @@ const initializeHls = (radioSlug) => {
     if (isDebugMode.value) {
       console.log('[Player] Manifest parsed, attempting to play...');
     }
-    if (!isWarmingUp.value || userInitiatedPlay.value) {
+    if (!isStalled.value) {
       audioPlayer.value.play().catch(e => {
         if (isDebugMode.value) {
           console.error('Error on autoplay:', e);
@@ -370,8 +421,13 @@ const initializeHls = (radioSlug) => {
     
     stationStore.trackSegmentLoad(true);
     
-    if (hls && hls.media && hls.media.paused && !userPaused.value && (!isWarmingUp.value || userInitiatedPlay.value)) {
-      console.log('Media is paused (not by user), attempting to play...');
+    const ahead = bufferAheadSeconds();
+    if (ahead >= 3) {
+      isStalled.value = false;
+    }
+
+    if (hls && hls.media && hls.media.paused && !userPaused.value && !isStalled.value && ahead >= 3) {
+      if (isDebugMode.value) console.log('Auto-resume: sufficient buffer ahead', ahead.toFixed(2));
       hls.media.play().catch(e => {
         console.error('Failed to resume playback after buffering:', e);
       });
@@ -453,6 +509,11 @@ const initializeHls = (radioSlug) => {
 
   hls.on(Hls.Events.BUFFER_STALLED, (event, data) => {
     stationStore.setBufferStatus('stalling');
+    isStalled.value = true;
+    if (audioPlayer.value && !audioPlayer.value.paused) {
+      if (isDebugMode.value) console.warn('[Player] Buffer stalled, pausing to avoid backtracking');
+      audioPlayer.value.pause();
+    }
   });
 
 
@@ -486,6 +547,20 @@ const initializeHls = (radioSlug) => {
       stationStore.setBufferStatus('fatal');
     }
   };
+
+  function bufferAheadSeconds() {
+    if (!audioPlayer.value) return 0;
+    const el = audioPlayer.value;
+    const t = el.currentTime;
+    const ranges = el.buffered;
+    let ahead = 0;
+    for (let i = 0; i < ranges.length; i++) {
+      if (ranges.start(i) <= t && t <= ranges.end(i)) {
+        ahead = Math.max(ahead, ranges.end(i) - t);
+      }
+    }
+    return ahead;
+  }
   
 
   const bufferHealthInterval = setInterval(checkBufferHealth, 2000);
@@ -599,27 +674,24 @@ onMounted(() => {
 });
 
 const shareWithFriend = async () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const radioName = urlParams.get('radio') || 'aizoo';
-  const shareUrl = `https://mixpla.kneo.io/?radio=${radioName}`;
-  
+  const currentRadio = (radioSlug && radioSlug.value) || (radioName && radioName.value) || 'aizoo';
+  const shareUrl = `${window.location.origin}/?radio=${currentRadio}`;
+  const titleText = `Listen to ${stationName && stationName.value ? stationName.value : currentRadio}`;
+  const bodyText = `Check out this radio station: ${stationName && stationName.value ? stationName.value : currentRadio}`;
   try {
     if (navigator.share) {
       await navigator.share({
-        title: `Listen to ${stationStore.stationName || radioName}`,
-        text: `Check out this radio station: ${stationStore.stationName || radioName}`,
+        title: titleText,
+        text: bodyText,
         url: shareUrl
       });
     } else {
       await navigator.clipboard.writeText(shareUrl);
     }
   } catch (error) {
-    console.error('Error sharing:', error);
     try {
       await navigator.clipboard.writeText(shareUrl);
-    } catch (clipboardError) {
-      console.error('Unable to share or copy link');
-    }
+    } catch {}
   }
 };
 
@@ -632,6 +704,7 @@ onBeforeUnmount(() => {
   }
   if (typingTimeout) clearTimeout(typingTimeout);
   if (retypeInterval) clearInterval(retypeInterval);
+  stopOfflineRetry();
   if (audioCtx) {
     audioCtx.close();
   }
@@ -712,6 +785,14 @@ onBeforeUnmount(() => {
   from, to { opacity: 0; }
   50% { opacity: 1; }
 }
+
+.progressIcon {
+  width: 32px;
+  height: 32px;
+  display: inline-block;
+}
+
+ 
 
 
 

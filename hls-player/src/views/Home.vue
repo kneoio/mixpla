@@ -1,5 +1,5 @@
 <template>
-  <div id="app-container" :style="[dynamicBorderStyle, pulsingBorderStyle]" :class="{ 'warming-up': isWarmingUp }">
+  <div id="app-container" :style="[dynamicBorderStyle, pulsingBorderStyle]">
     <div class="station-selector-wrapper">
       <n-button-group>
         <n-button v-for=" station in mainStations " :key="station.name" :type="getButtonType( station )"
@@ -44,7 +44,7 @@ const {
   radioName,
   isAsleep,
 
-  isWarmingUp,
+  
   bufferStatus,
   dynamicBorderStyle: storeDynamicBorderStyle,
   isBroadcasting,
@@ -56,8 +56,9 @@ onMounted(async () => {
   await stationStore.fetchStations(false);
 } );
 
-const mainStations = computed( () => stations.value.slice( 0, 4 ) );
-const dropdownStations = computed( () => stations.value.slice( 4 ) );
+const filteredStations = computed( () => stations.value.filter( s => s.name !== 'login' ) );
+const mainStations = computed( () => filteredStations.value.slice( 0, 4 ) );
+const dropdownStations = computed( () => filteredStations.value.slice( 4 ) );
 
 const getStationStyle = ( station ) => {
   if ( station.aiControlAllowed ) {
@@ -96,17 +97,10 @@ const isDropdownStationActive = computed( () =>
 
 const indicatorClass = computed( () => {
   if ( isAsleep.value ) return 'waiting';
-
-  if ( isWarmingUp.value ) return 'waiting';
   return bufferStatus.value;
 } );
 
 const dynamicBorderStyle = computed( () => {
-  if ( isWarmingUp.value ) {
-    return {
-      '--dynamic-border-rgb': '128, 128, 128',
-    };
-  }
   return storeDynamicBorderStyle.value;
 } );
 
