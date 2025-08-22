@@ -21,7 +21,7 @@
       <div class="controls">
         <n-button @click="togglePlay" type="primary" circle strong size="large">
           <template #icon>
-            <img v-if="isBuffering" :src="playWaitIcon" alt="buffering" class="progressIcon" />
+            <img v-if="isBuffering" :src="uiStore.theme === 'dark' ? playWaitIcon : playWaitIconWhite" alt="buffering" class="progressIcon" />
             <n-icon v-else :component="buttonIcon" class="btn-icon" />
           </template>
         </n-button>
@@ -60,6 +60,7 @@ import Share from '@vicons/tabler/es/Share';
 import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
 import playWaitIcon from '/play_wait.svg';
+import playWaitIconWhite from '/play_wait_white.svg';
 
 const audioPlayer = ref(null);
 
@@ -113,7 +114,7 @@ const dynamicColorStyle = computed(() => {
 
 const displayStatusText = computed(() => {
   if (isAsleep.value && isRetryingOffline.value) {
-    return 'Station is offline - Retrying every 15s (press play to stop)';
+    return 'Station is offline - waiting...';
   } else if (isAsleep.value) {
     return 'Station is offline';
   }
@@ -175,6 +176,7 @@ watch(
     if (slugChanged) {
       console.log(`[Player] Initializing HLS for slug: ${newSlug}`);
       userInitiatedPlay.value = false;
+      isPlaying.value = false;
       initializeHls(newSlug);
     }
   },
@@ -386,12 +388,12 @@ const initializeHls = (radioSlug) => {
 
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
     if (isDebugMode.value) {
-      console.log('[Player] Manifest parsed, attempting to play...');
+      console.log('[Player] Manifest parsed, ready to play...');
     }
-    if (!isStalled.value) {
+    if (!isStalled.value && userInitiatedPlay.value) {
       audioPlayer.value.play().catch(e => {
         if (isDebugMode.value) {
-          console.error('Error on autoplay:', e);
+          console.error('Error on user-initiated play:', e);
         }
       });
     }
@@ -791,6 +793,7 @@ onBeforeUnmount(() => {
   height: 32px;
   display: inline-block;
 }
+
 
  
 
