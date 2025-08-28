@@ -38,12 +38,12 @@ const {
 } = storeToRefs( stationStore );
 
 onMounted(async () => {
-  await stationStore.fetchStations(false);
-  
-  if (radioParam.value) {
-    const decodedStationName = decodeURIComponent(radioParam.value);
-    stationStore.setStation(decodedStationName);
+  localStorage.clear();
+  if ('caches' in window) {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(name => caches.delete(name)));
   }
+  await stationStore.fetchStations(false);
 } );
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));

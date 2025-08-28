@@ -331,11 +331,17 @@ const togglePlay = () => {
         startOfflineRetry();
       }
     } else {
+      if (hls) {
+        hls.startLoad();
+      }
       audioPlayer.value.play().catch(e => console.error('Play error:', e));
     }
   } else {
     userPaused.value = true;
     audioPlayer.value.pause();
+    if (hls) {
+      hls.stopLoad();
+    }
     stopOfflineRetry();
   }
 };

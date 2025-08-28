@@ -16,7 +16,7 @@ export const useStationStore = defineStore('station', {
   state: () => ({
     animationIntensity: 0,
     stations: [],
-    radioName: storageService.getLastStation() || '',
+    radioName: '',
     radioSlug: '',
     stationName: '',
     stationColor: null,
