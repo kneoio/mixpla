@@ -359,11 +359,17 @@ export const useStationStore = defineStore('station', {
 
     setStation(station) {
       const stationName = typeof station === 'string' ? station : station.name;
-      const stationData = typeof station === 'object' ? station : this.stations.find(s => s.name === stationName);
+      const stationData = typeof station === 'object' ? station : this.stations.find(s => s.name === stationName || s.slugName === stationName);
       
       if (stationName && this.radioName !== stationName) {
         this.radioName = stationName;
-        this.radioSlug = stationData?.slugName || '';
+        
+        if (stationData?.slugName) {
+          this.radioSlug = stationData.slugName;
+        } else {
+          this.radioSlug = stationName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        }
+        
         storageService.saveLastStation(stationName);
         
         this.stationName = stationData?.displayName || stationName;

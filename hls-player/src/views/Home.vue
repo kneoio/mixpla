@@ -39,6 +39,11 @@ const {
 
 onMounted(async () => {
   await stationStore.fetchStations(false);
+  
+  if (radioParam.value) {
+    const decodedStationName = decodeURIComponent(radioParam.value);
+    stationStore.setStation(decodedStationName);
+  }
 } );
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));
