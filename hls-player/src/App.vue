@@ -203,12 +203,8 @@ const debugMode = computed(() => {
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 
 onMounted(async () => {
-  try {
-    await authStore.init();
-    console.log('Auth initialized. Authenticated:', authStore.isAuthenticated);
-  } catch (error) {
-    console.error('Failed to initialize auth:', error);
-  }
+  // Auth initialization disabled - simplified player without authentication
+  console.log('Auth initialization skipped - simplified player mode');
 });
 
 // Watch for auth state changes

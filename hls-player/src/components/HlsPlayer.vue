@@ -31,6 +31,20 @@
       <div class="station-status">
         <span>{{ displayStatusText }}</span>
       </div>
+      
+      <div class="station-selector-wrapper" v-if="showStations" style="margin-top: 2.5rem;">
+        <n-button-group>
+          <n-button v-for=" station in mainStations " :key="station.name" :type="getButtonType( station )"
+            @click="handleStationClick( station )" :style="getStationStyle( station )">
+            {{ formatStationName( station.name ) }}
+          </n-button>
+          <n-dropdown v-if=" dropdownOptions.length " trigger="click" :options="dropdownOptions"
+            @select="handleDropdownSelect" placement="bottom-end">
+            <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
+          </n-dropdown>
+        </n-button-group>
+      </div>
+      
       <n-button 
         @click="shareWithFriend" 
         class="share-button"
@@ -53,7 +67,7 @@ import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
 import { useSegmentStatsStore } from '../stores/segmentStats';
 import { storeToRefs } from 'pinia';
-import { NButton, NIcon, NSelect, NSlider, useMessage } from 'naive-ui';
+import { NButton, NIcon, NSelect, NSlider, useMessage, NButtonGroup, NDropdown } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Share from '@vicons/tabler/es/Share';
@@ -73,7 +87,75 @@ const isStalled = ref(false);
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const segmentStatsStore = useSegmentStatsStore();
-const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, djName, djStatus, stationColor, titleAnimation, bufferStatus } = storeToRefs(stationStore);
+const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, djName, djStatus, stationColor, titleAnimation, bufferStatus, stations } = storeToRefs(stationStore);
+
+const urlParams = computed(() => new URLSearchParams(window.location.search));
+const radioParam = computed(() => urlParams.value.get('radio'));
+const requestedStations = computed(() => radioParam.value ? radioParam.value.split(',').map(s => s.trim()) : []);
+
+const showStations = computed(() => requestedStations.value.length > 1);
+
+const displayStations = computed(() => {
+  if (requestedStations.value.length > 0) {
+    return requestedStations.value.map(stationName => {
+      const existingStation = stations.value.find(s => s.name === stationName || s.slugName === stationName);
+      return existingStation || {
+        name: stationName,
+        displayName: stationName,
+        color: '#6b7280',
+        currentStatus: 'UNKNOWN',
+        type: 'station'
+      };
+    });
+  }
+  return [];
+});
+
+const mainStations = computed(() => displayStations.value.slice(0, 3));
+const dropdownStations = computed(() => displayStations.value.slice(3));
+
+const dropdownOptions = computed(() =>
+  dropdownStations.value.map(station => ({
+    label: station.displayName || formatStationName(station.name),
+    key: station.name,
+    props: {
+      style: getStationStyle(station)
+    }
+  }))
+);
+
+const isDropdownStationActive = computed(() =>
+  dropdownStations.value.some(s => s.name === radioName.value)
+);
+
+const getStationStyle = (station) => {
+  if (station.aiControlAllowed) {
+    return { color: '#FFA500' };
+  }
+  
+  const activeStatuses = ['ONLINE', 'BROADCASTING'];
+  if (activeStatuses.includes(station.currentStatus)) {
+    return { color: station.color };
+  }
+  return {};
+};
+
+const formatStationName = (name) => {
+  const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+  return capitalized.length > 6 ? `${capitalized.substring(0, 6)}...` : capitalized;
+};
+
+const getButtonType = (station) => {
+  return stationStore.radioName === station.name ? 'primary' : 'default';
+};
+
+const handleStationClick = (station) => {
+  stationStore.setStation(station.name);
+};
+
+const handleDropdownSelect = (key) => {
+  stationStore.setStation(key);
+};
 
 const isDebugMode = computed(() => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -167,21 +249,8 @@ watch(curatorText, (newText, oldText) => {
   }
 });
 
-// Initialize HLS as soon as slug exists and whenever it changes.
-watch(
-  () => radioSlug.value,
-  (newSlug, oldSlug) => {
-    if (!newSlug) return;
-    const slugChanged = !oldSlug || newSlug !== oldSlug;
-    if (slugChanged) {
-      console.log(`[Player] Initializing HLS for slug: ${newSlug}`);
-      userInitiatedPlay.value = false;
-      isPlaying.value = false;
-      initializeHls(newSlug);
-    }
-  },
-  { immediate: true }
-);
+let offlineRetryInterval = null;
+const isRetryingOffline = ref(false);
 
 const startOfflineRetry = () => {
   if (offlineRetryInterval) return;
@@ -204,6 +273,42 @@ const stopOfflineRetry = () => {
   }
   isRetryingOffline.value = false;
 };
+
+// Initialize HLS as soon as slug exists and whenever it changes.
+watch(
+  () => radioSlug.value,
+  (newSlug, oldSlug) => {
+    const slugChanged = !oldSlug || newSlug !== oldSlug;
+    if (slugChanged) {
+      console.log(`[Player] Station changed, slug: ${newSlug || 'empty'}`);
+      
+      // Always stop current audio playback when station changes
+      if (audioPlayer.value) {
+        audioPlayer.value.pause();
+        audioPlayer.value.currentTime = 0;
+        audioPlayer.value.src = '';
+        audioPlayer.value.load();
+      }
+      
+      // Destroy existing HLS instance
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      
+      userInitiatedPlay.value = false;
+      userPaused.value = false;
+      isPlaying.value = false;
+      stopOfflineRetry();
+      
+      // Only initialize HLS if we have a valid slug
+      if (newSlug) {
+        initializeHls(newSlug);
+      }
+    }
+  },
+  { immediate: true }
+);
 
 const togglePlay = () => {
   if (!audioPlayer.value) return;
@@ -239,9 +344,6 @@ let recoveryAttempts = 0;
 const MAX_RECOVERY_ATTEMPTS = 3;
 let recoveryTimeout = null;
 
-let offlineRetryInterval = null;
-const isRetryingOffline = ref(false);
-
 const resetRecoveryState = () => {
   recoveryAttempts = 0;
   if (recoveryTimeout) {
@@ -276,6 +378,15 @@ const initializeHls = (radioSlug) => {
   
   if (hls) {
     hls.destroy();
+    hls = null;
+  }
+  
+  // Ensure audio is completely stopped
+  if (audioPlayer.value) {
+    audioPlayer.value.pause();
+    audioPlayer.value.currentTime = 0;
+    audioPlayer.value.src = '';
+    audioPlayer.value.load();
   }
   if (!Hls.isSupported()) {
     console.error("HLS is not supported in this browser.");
@@ -739,7 +850,7 @@ onBeforeUnmount(() => {
 .station-name {
   font-weight: bold;
   font-size: 1.5rem;
-  margin: 0;
+  margin-top: 2rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -752,7 +863,6 @@ onBeforeUnmount(() => {
 }
 
 .share-button {
-  margin-top: 10px;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;

@@ -1,18 +1,5 @@
 <template>
   <div id="app-container" :style="[dynamicBorderStyle, pulsingBorderStyle]">
-    <div class="station-selector-wrapper">
-      <n-button-group>
-        <n-button v-for=" station in mainStations " :key="station.name" :type="getButtonType( station )"
-          @click="handleStationClick( station )" :style="getStationStyle( station )" :disabled="getButtonDisabled( station )">
-          {{ formatStationName( station.name ) }}
-        </n-button>
-      </n-button-group>
-      <n-dropdown v-if=" dropdownOptions.length " trigger="click" :options="dropdownOptions"
-        @select="handleDropdownSelect">
-        <n-button :type="isDropdownStationActive ? 'primary' : 'default'">...</n-button>
-      </n-dropdown>
-    </div>
-
     <div class="status-indicator-wrapper-top-left">
       <div :class="['buffer-indicator', indicatorClass]"></div>
     </div>
@@ -31,12 +18,10 @@ import HlsPlayer from '../components/HlsPlayer.vue';
 import './Home.css';
 import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
-import { useAuthStore } from '../stores/auth';
 import { storeToRefs } from 'pinia';
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
-const authStore = useAuthStore();
 
 
 const {
@@ -56,9 +41,44 @@ onMounted(async () => {
   await stationStore.fetchStations(false);
 } );
 
-const filteredStations = computed( () => stations.value.filter( s => s.name !== 'login' ) );
-const mainStations = computed( () => filteredStations.value.slice( 0, 4 ) );
-const dropdownStations = computed( () => filteredStations.value.slice( 4 ) );
+const urlParams = computed(() => new URLSearchParams(window.location.search));
+const radioParam = computed(() => urlParams.value.get('radio'));
+const requestedStations = computed(() => radioParam.value ? radioParam.value.split(',').map(s => s.trim()) : []);
+
+const showStations = computed(() => requestedStations.value.length > 1);
+
+const displayStations = computed(() => {
+  if (requestedStations.value.length > 0) {
+    return requestedStations.value.map(stationName => {
+      const existingStation = stations.value.find(s => s.name === stationName || s.slugName === stationName);
+      return existingStation || {
+        name: stationName,
+        displayName: stationName,
+        color: '#6b7280',
+        currentStatus: 'UNKNOWN',
+        type: 'station'
+      };
+    });
+  }
+  return [];
+});
+
+const mainStations = computed(() => displayStations.value.slice(0, 3));
+const dropdownStations = computed(() => displayStations.value.slice(3));
+
+const dropdownOptions = computed(() =>
+  dropdownStations.value.map(station => ({
+    label: station.displayName || formatStationName(station.name),
+    key: station.name,
+    props: {
+      style: getStationStyle(station)
+    }
+  }))
+);
+
+const isDropdownStationActive = computed(() =>
+  dropdownStations.value.some(s => s.name === radioName.value)
+);
 
 const getStationStyle = ( station ) => {
   if ( station.aiControlAllowed ) {
@@ -73,27 +93,10 @@ const getStationStyle = ( station ) => {
 };
 
 const formatStationName = ( name ) => {
-  if ( name === 'login' ) return 'Login';
-  if ( name === 'logout' ) return authStore.isAuthenticated ? `Logout (${authStore.user?.preferred_username})` : 'Logout';
-
   const capitalized = name.charAt( 0 ).toUpperCase() + name.slice( 1 );
   return capitalized.length > 6 ? `${capitalized.substring( 0, 6 )}...` : capitalized;
 };
 
-const dropdownOptions = computed( () =>
-  dropdownStations.value
-    .map( station => ( {
-      label: station.type === 'auth' ? formatStationName( station.name ) : station.name.charAt( 0 ).toUpperCase() + station.name.slice( 1 ),
-      key: station.name,
-      props: {
-        style: getStationStyle( station )
-      }
-    } ) )
-);
-
-const isDropdownStationActive = computed( () =>
-  dropdownStations.value.some( s => s.name === radioName.value )
-);
 
 const indicatorClass = computed( () => {
   if ( isAsleep.value ) return 'waiting';
@@ -135,36 +138,18 @@ const pulsingBorderStyle = computed( () => {
 } );
 
 const getButtonType = ( station ) => {
-  if ( station.name === 'login' ) return 'default';
-  if ( station.name === 'logout' ) return 'warning';
   return stationStore.radioName === station.name ? 'primary' : 'default';
 };
 
-const getButtonDisabled = ( station ) => {
-  if ( station.name === 'login' ) return authStore.isAuthenticated;
-  if ( station.name === 'logout' ) return !authStore.isAuthenticated;
-  return false;
-};
 
 const handleStationClick = ( station ) => {
-  if ( station.name === 'login' ) {
-    authStore.login();
-  } else if ( station.name === 'logout' ) {
-    authStore.logout();
-  } else {
-    stationStore.setStation( station.name );
-  }
+  stationStore.setStation( station.name );
 };
 
 const handleDropdownSelect = ( key ) => {
-  if ( key === 'login' ) {
-    authStore.login();
-  } else if ( key === 'logout' ) {
-    authStore.logout();
-  } else {
-    stationStore.setStation( key );
-  }
+  stationStore.setStation( key );
 };
+
 
 watch( () => radioName.value, ( newName, oldName ) => {
   if ( newName && newName !== oldName ) {

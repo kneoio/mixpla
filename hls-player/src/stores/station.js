@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { storageService } from '../services/storage';
 import apiClient, { publicApiClient } from '../services/api';
-import { useAuthStore } from '../stores/auth';
 
 const lightenColor = (hex, percent) => {
     if (!hex || !hex.startsWith('#')) return hex;
@@ -35,7 +34,6 @@ export const useStationStore = defineStore('station', {
       level: 0,
       health: 'good'
     },
-    authEntry: null,
     track404: false,
     count404: 0,
     segmentStats: {
@@ -141,40 +139,12 @@ export const useStationStore = defineStore('station', {
       }
     },
     
-    updateAuthEntry() {
-      const authStore = useAuthStore();
-      
-      this.stations = this.stations.filter(s => s.type !== 'auth');
-      
-      const authEntry = authStore.isAuthenticated ? 
-        {
-          name: 'logout',
-          displayName: 'Logout',
-          type: 'auth',
-          color: '#ef4444',
-          currentStatus: 'STATIC'
-        } : 
-        {
-          name: 'login',
-          displayName: 'Login',
-          type: 'auth',
-          color: '#6b7280',
-          currentStatus: 'STATIC'
-        };
-      
-      this.stations.push(authEntry);
-    },
-    
-    onAuthStateChanged() {
-      this.updateAuthEntry();
-    },
     
     async fetchStations(skipAutoSelect = false) {
       try {
         const response = await publicApiClient.get('/radio/stations');
         this.stations = response.data;
         
-        this.updateAuthEntry();
         
         if (!skipAutoSelect) {
           const urlParams = new URLSearchParams(window.location.search);
@@ -183,8 +153,8 @@ export const useStationStore = defineStore('station', {
           let targetStationName = this.radioName;
           
           if (radioParam) {
-            const stationBySlug = this.stations.find(s => s.slugName === radioParam && s.type !== 'auth');
-            const stationByName = this.stations.find(s => s.name === radioParam && s.type !== 'auth');
+            const stationBySlug = this.stations.find(s => s.slugName === radioParam);
+            const stationByName = this.stations.find(s => s.name === radioParam);
             const targetStation = stationBySlug || stationByName;
             
             if (targetStation) {
@@ -194,10 +164,10 @@ export const useStationStore = defineStore('station', {
             }
           }
           
-          const stationExists = this.stations.some(s => s.name === targetStationName && s.type !== 'auth');
+          const stationExists = this.stations.some(s => s.name === targetStationName);
 
           if (!targetStationName || !stationExists) {
-            const realStations = this.stations.filter(s => s.type !== 'auth');
+            const realStations = this.stations;
             if (realStations.length > 0) {
               this.radioName = realStations[0].name;
               this.radioSlug = realStations[0].slugName || '';
@@ -205,7 +175,7 @@ export const useStationStore = defineStore('station', {
             }
           } else {
             this.radioName = targetStationName;
-            const currentStation = this.stations.find(s => s.name === targetStationName && s.type !== 'auth');
+            const currentStation = this.stations.find(s => s.name === targetStationName);
             this.radioSlug = currentStation?.slugName || '';
             
             this.stationName = currentStation?.displayName || targetStationName;
@@ -229,8 +199,8 @@ export const useStationStore = defineStore('station', {
           const urlParams = new URLSearchParams(window.location.search);
           const radioParam = urlParams.get('radio');
           if (radioParam && !this.radioSlug) {
-            const stationBySlug = this.stations.find(s => s.slugName === radioParam && s.type !== 'auth');
-            const stationByName = this.stations.find(s => s.name === radioParam && s.type !== 'auth');
+            const stationBySlug = this.stations.find(s => s.slugName === radioParam);
+            const stationByName = this.stations.find(s => s.name === radioParam);
             const targetStation = stationBySlug || stationByName;
             if (targetStation) {
               this.radioName = targetStation.name;
@@ -266,8 +236,6 @@ export const useStationStore = defineStore('station', {
             this.listPollingInterval = null;
           }
           
-          const authStore = useAuthStore();
-          authStore.logout();
           return;
         }
         
@@ -296,24 +264,6 @@ export const useStationStore = defineStore('station', {
             type: 'station'
           }];
           
-          const authStore = useAuthStore();
-          const authEntry = authStore.isAuthenticated ? 
-            {
-              name: 'logout',
-              displayName: 'Logout',
-              type: 'auth',
-              color: '#ef4444',
-              currentStatus: 'STATIC'
-            } : 
-            {
-              name: 'login',
-              displayName: 'Login',
-              type: 'auth',
-              color: '#6b7280',
-              currentStatus: 'STATIC'
-            };
-          
-          this.stations.push(authEntry);
           this.statusText = 'Limited station list (connection issue).';
           
           if (radioParam) {
@@ -334,7 +284,7 @@ export const useStationStore = defineStore('station', {
         const response = await apiClient.get(`/${this.radioSlug}/radio/status`);
         const data = response.data;
         this.stationInfo = data;
-        const currentStation = this.stations.find(s => (s.slugName || s.name) === this.radioSlug && s.type !== 'auth');
+        const currentStation = this.stations.find(s => (s.slugName || s.name) === this.radioSlug);
         this.stationName = currentStation?.displayName || this.stationName || data.name || this.radioName;
         this.djName = data.djName;
         this.djStatus = data.djStatus;
@@ -380,7 +330,7 @@ export const useStationStore = defineStore('station', {
                 this.isAsleep = true;
                 this.isBroadcasting = false;
                 this.statusText = 'Station is offline.';
-                const currentStation = this.stations.find(s => s.name === this.radioName && s.type !== 'auth');
+                const currentStation = this.stations.find(s => s.name === this.radioName);
                 this.stationName = currentStation?.displayName || this.stationName || this.radioName;
                 this.stopPolling();
                 return;
