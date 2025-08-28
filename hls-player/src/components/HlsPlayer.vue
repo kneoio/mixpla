@@ -754,6 +754,10 @@ onMounted(() => {
       window.audioContext = audioCtx;
     }
     
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    
     renderFrame();
   };
   
