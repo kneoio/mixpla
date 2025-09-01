@@ -38,11 +38,6 @@ const {
 } = storeToRefs( stationStore );
 
 onMounted(async () => {
-  localStorage.clear();
-  if ('caches' in window) {
-    const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map(name => caches.delete(name)));
-  }
   await stationStore.fetchStations(false);
 } );
 
