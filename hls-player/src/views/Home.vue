@@ -4,8 +4,10 @@
       <div :class="['buffer-indicator', indicatorClass]"></div>
     </div>
     <div class="theme-switch-wrapper">
-      <n-switch :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" />
-      <span>Dark Mode</span>
+      <n-switch size="medium" :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" :round="false" />
+      <span>Theme</span>
+      <n-switch size="medium" :value="!uiStore.disableAnimations" @update:value="uiStore.toggleAnimationsDisabled" :round="false" />
+      <span>Animation</span>
     </div>
     <HlsPlayer />
   </div>
@@ -108,6 +110,7 @@ const dynamicBorderStyle = computed( () => {
 } );
 
 const pulsingBorderStyle = computed( () => {
+  if (uiStore.disableAnimations) return {};
   if ( !isBroadcasting.value ) return {};
 
   const intensity = animationIntensity.value;

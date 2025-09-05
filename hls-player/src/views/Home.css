@@ -91,6 +91,12 @@
   animation: pulse-yellow 1.5s infinite;
 }
 
+/* Reduced motion: disable animations and transitions when user toggles it */
+body.reduce-motion *, body.reduce-motion {
+  animation: none !important;
+  transition: none !important;
+}
+
 /* Adjust main container to remove extra spacing */
 #app-container {
   margin-bottom: 0;

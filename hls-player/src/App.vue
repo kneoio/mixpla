@@ -22,9 +22,10 @@
             <div v-if="!showMessageInput" key="button" class="message-button-wrapper">
               <n-button 
                 @click="toggleMessageInput" 
-                class="message-button invisible-button"
+                class="message-button invisible-button no-round"
                 size="large"
                 text
+                :round="false"
               >
               </n-button>
             </div>
@@ -46,9 +47,9 @@
                 <n-button 
                   @click="handleMessageSubmit" 
                   :disabled="!messageText.trim()"
-                  class="send-button gradient-button"
-                  circle
+                  class="send-button gradient-button no-round"
                   size="large"
+                  :round="false"
                 >
                   <template #icon>
                     <n-icon :component="Comet" size="20" />
@@ -56,11 +57,11 @@
                 </n-button>
                 <n-button 
                   @click="cancelMessage" 
-                  class="cancel-button"
-                  round
+                  class="cancel-button no-round"
                   size="small"
                   secondary
-                  circle
+                  :round="false"
+                  :style="{ '--n-border-radius': '0px' }"
                 >
                   <template #icon>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -82,6 +83,8 @@
         type="primary" 
         size="small"
         style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"
+        class="no-round"
+        :round="false"
       >
         {{ showDiagnostics ? 'Hide Diagnostics' : 'Show Diagnostics' }}
       </n-button>
@@ -97,7 +100,6 @@ import { NConfigProvider, NGlobalStyle, NButton, NInput, NIcon, NMessageProvider
 import { Comet } from '@vicons/tabler';
 import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
-import { useAuthStore } from './stores/auth';
 import { useStationStore } from './stores/station';
 
 import { storeToRefs } from 'pinia';
@@ -108,12 +110,7 @@ const showMessageInput = ref(false);
 const messageText = ref('');
 let autoCloseTimer = null;
 
-const logAuthState = () => {
-  console.log('Auth state:', {
-    isAuthenticated: authStore.isAuthenticated,
-    user: authStore.user,
-    showMessageInput: showMessageInput.value
-  });};
+ 
 
 const messageInput = ref(null);
 
@@ -187,7 +184,6 @@ const cancelMessage = () => {
 };
 
 const uiStore = useUiStore();
-const authStore = useAuthStore();
 const stationStore = useStationStore();
 
 const { theme } = storeToRefs(uiStore);
@@ -200,17 +196,9 @@ const debugMode = computed(() => {
   return urlParams.get('debug') === '1' || urlParams.get('debug') === 'true';
 });
 
-const isAuthenticated = computed(() => authStore.isAuthenticated);
+const isAuthenticated = ref(true);
 
-onMounted(async () => {
-  // Auth initialization disabled - simplified player without authentication
-  console.log('Auth initialization skipped - simplified player mode');
-});
-
-// Watch for auth state changes
-watch(() => authStore.isAuthenticated, (newValue) => {
-  console.log('Auth state changed:', newValue);
-});
+ 
 
 const naiveTheme = computed(() => (uiStore.theme === 'dark' ? darkTheme : null));
 
@@ -220,6 +208,12 @@ const themeOverrides = {
     primaryColorHover: '#374151',
     primaryColorPressed: '#1f2937',
     primaryColorSuppl: '#374151'
+  },
+  Button: {
+    borderRadiusTiny: '0px',
+    borderRadiusSmall: '0px',
+    borderRadiusMedium: '0px',
+    borderRadiusLarge: '0px'
   }
 };
 
@@ -376,7 +370,7 @@ footer {
   min-width: 48px !important;
   width: 48px !important;
   height: 48px !important;
-  border-radius: 50% !important;
+  border-radius: 0 !important;
   padding: 0 !important;
   display: flex !important;
   align-items: center !important;

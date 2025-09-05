@@ -1,6 +1,7 @@
 
 const LAST_STATION_KEY = 'mixpla_last_station';
 const LAST_THEME_KEY = 'mixpla_last_theme';
+const DISABLE_ANIM_KEY = 'mixpla_disable_animations';
 
 export const storageService = {
   saveLastStation(stationName) {
@@ -21,5 +22,15 @@ export const storageService = {
 
   getLastTheme() {
     return localStorage.getItem(LAST_THEME_KEY);
+  },
+
+  saveDisableAnimations(disabled) {
+    localStorage.setItem(DISABLE_ANIM_KEY, disabled ? '1' : '0');
+  },
+
+  getDisableAnimations() {
+    const v = localStorage.getItem(DISABLE_ANIM_KEY);
+    if (v === null) return null;
+    return v === '1';
   },
 };
