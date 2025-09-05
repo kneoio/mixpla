@@ -838,6 +838,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+  width: 100%;
 }
 
 .now-playing-info {
@@ -847,6 +848,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-width: 120px;
   min-height: 120px;
+  width: 100%;
 }
 
 .title {

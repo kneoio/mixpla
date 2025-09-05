@@ -4,11 +4,20 @@
   border-radius: 15px;
   position: relative;
   width: 100%;
-  max-width: 400px;
+  min-width: 320px;
+  max-width: 420px;
+  margin-top: 56px;
   box-sizing: border-box;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   border: 2px solid transparent;
   transition: all 0.5s ease-in-out;
+}
+
+@media (max-width: 360px) {
+  #app-container {
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 #app-container[style*='--dynamic-border-color'] {
