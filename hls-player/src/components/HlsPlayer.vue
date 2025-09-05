@@ -16,6 +16,7 @@
           :text="nowPlaying" 
           :animation-type="titleAnimation.enabled ? titleAnimation.type : 'static'" 
           :animation-speed="titleAnimation.speed" 
+          :station-color="complementColor"
         />
       </div>
       <div class="controls">
@@ -194,6 +195,16 @@ const curatorText = computed(() => {
 const dynamicColorStyle = computed(() => {
   const color = stationColor.value || (uiStore.theme === 'dark' ? '#FFFFFF' : '#000000');
   return { color };
+});
+
+const complementColor = computed(() => {
+  const base = (stationColor.value || '#3D20E4').replace('#', '');
+  const hex = base.length === 3 ? base.split('').map(c => c + c).join('') : base.substring(0, 6);
+  const r = 255 - parseInt(hex.substring(0, 2), 16);
+  const g = 255 - parseInt(hex.substring(2, 4), 16);
+  const b = 255 - parseInt(hex.substring(4, 6), 16);
+  const toHex = (n) => n.toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 });
 
 const displayStatusText = computed(() => {

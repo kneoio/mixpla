@@ -70,22 +70,7 @@ const displayStations = computed(() => {
   return [];
 });
 
-const mainStations = computed(() => displayStations.value.slice(0, 3));
-const dropdownStations = computed(() => displayStations.value.slice(3));
-
-const dropdownOptions = computed(() =>
-  dropdownStations.value.map(station => ({
-    label: station.displayName || formatStationName(station.name),
-    key: station.name,
-    props: {
-      style: getStationStyle(station)
-    }
-  }))
-);
-
-const isDropdownStationActive = computed(() =>
-  dropdownStations.value.some(s => s.name === radioName.value)
-);
+ 
 
 const getStationStyle = ( station ) => {
   if ( station.aiControlAllowed ) {
