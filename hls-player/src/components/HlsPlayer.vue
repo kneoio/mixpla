@@ -842,6 +842,11 @@ onBeforeUnmount(() => {
 
 .now-playing-info {
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  min-height: 120px;
 }
 
 .title {
