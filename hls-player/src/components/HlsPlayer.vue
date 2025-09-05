@@ -234,7 +234,7 @@ const startTypingAnimation = (text) => {
     };
     type();
   }
-};
+}
 
 watch(curatorText, (newText, oldText) => {
   if (retypeInterval) clearInterval(retypeInterval);
@@ -379,7 +379,7 @@ const attemptRecovery = (hlsInstance, errorType = 'unknown') => {
   return true;
 };
 
-const initializeHls = (radioSlug) => {
+function initializeHls(radioSlug) {
   resetRecoveryState();
   
   if (hls) {
@@ -691,6 +691,7 @@ const initializeHls = (radioSlug) => {
     });
     
     audioPlayer.value.addEventListener('timeupdate', () => {
+      if (!audioPlayer.value) return;
       const currentTime = audioPlayer.value.currentTime;
       const now = Date.now();
       const timeDiff = Math.abs(currentTime - lastCurrentTime);

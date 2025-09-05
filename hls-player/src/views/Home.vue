@@ -15,7 +15,7 @@
 
 <script setup>
 import { onMounted, computed, watch } from 'vue';
-import { NButton, NDropdown, NButtonGroup, NSwitch } from 'naive-ui';
+import { NSwitch } from 'naive-ui';
 import HlsPlayer from '../components/HlsPlayer.vue';
 import './Home.css';
 import { useUiStore } from '../stores/ui';
