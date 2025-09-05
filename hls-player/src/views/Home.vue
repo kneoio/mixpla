@@ -3,18 +3,18 @@
     <div class="status-indicator-wrapper-top-left">
       <div :class="['buffer-indicator', indicatorClass]"></div>
     </div>
-    <div class="theme-switch-wrapper">
+    <div class="theme-switch-wrapper" v-if="isPaused">
       <n-switch size="medium" :value="uiStore.theme === 'dark'" @update:value="uiStore.toggleTheme" :round="false" />
       <span>Theme</span>
       <n-switch size="medium" :value="!uiStore.disableAnimations" @update:value="uiStore.toggleAnimationsDisabled" :round="false" />
       <span>Animation</span>
     </div>
-    <HlsPlayer />
+    <HlsPlayer @play-state="onPlayState" />
   </div>
 </template>
 
 <script setup>
-import { onMounted, computed, watch } from 'vue';
+import { onMounted, computed, watch, ref } from 'vue';
 import { NSwitch } from 'naive-ui';
 import HlsPlayer from '../components/HlsPlayer.vue';
 import './Home.css';
@@ -24,6 +24,11 @@ import { storeToRefs } from 'pinia';
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
+
+const isPaused = ref(true);
+const onPlayState = (e) => {
+  isPaused.value = !e.playing;
+};
 
 
 const {

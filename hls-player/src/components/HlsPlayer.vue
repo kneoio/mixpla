@@ -76,6 +76,8 @@ import AnimatedText from './AnimatedText.vue';
 import playWaitIcon from '/play_wait.svg';
 import playWaitIconWhite from '/play_wait_white.svg';
 
+const emit = defineEmits(['play-state']);
+
 const audioPlayer = ref(null);
 
 let hls = null;
@@ -755,6 +757,7 @@ onMounted(() => {
 
   const onPlay = () => {
     isPlaying.value = true;
+    emit('play-state', { playing: true });
     
     if (!audioCtx) {
       setupAudioVisualizer();
@@ -781,6 +784,7 @@ onMounted(() => {
 
   const onPauseOrEnd = () => {
     isPlaying.value = false;
+    emit('play-state', { playing: false });
     // Stop the animation loop.
     if (animationFrameId) {
       cancelAnimationFrame(animationFrameId);
