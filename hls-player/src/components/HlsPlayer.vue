@@ -333,6 +333,9 @@ const togglePlay = () => {
   if (audioPlayer.value.paused) {
     userPaused.value = false;
     userInitiatedPlay.value = true;
+    if (!hls && radioSlug.value) {
+      initializeHls(radioSlug.value);
+    }
     
     if (isAsleep.value && radioSlug.value) {
       if (isRetryingOffline.value) {
@@ -392,7 +395,7 @@ const attemptRecovery = (hlsInstance, errorType = 'unknown') => {
   return true;
 };
 
-function initializeHls(radioSlug) {
+function initializeHls(slug) {
   resetRecoveryState();
   
   if (hls) {
@@ -412,8 +415,8 @@ function initializeHls(radioSlug) {
     return;
   }
 
-
-  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${radioSlug}/radio/stream.m3u8`;
+  const cacheBuster = Date.now();
+  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${slug}/radio/stream.m3u8?cb=${cacheBuster}`;
 
   if (isDebugMode.value) {
     segmentStatsStore.resetStats();
@@ -503,7 +506,7 @@ function initializeHls(radioSlug) {
         if (hls && !attemptRecovery(hls, errorType)) {
           console.error('[HLS] Recovery failed, triggering full reload');
           if (hls) hls.destroy();
-          initializeHls(radioSlug.value);
+          initializeHls(slug);
         }
       });
     }
@@ -597,7 +600,7 @@ function initializeHls(radioSlug) {
       if (!attemptRecovery(hls, errorType)) {
         console.error(`[HLS] Recovery failed for ${errorType} error, triggering full reload`);
         if (hls) hls.destroy();
-        initializeHls(radioSlug.value);
+        initializeHls(slug);
       } else {        
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           console.error("Network error, attempting recovery...");
