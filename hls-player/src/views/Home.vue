@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-import { onMounted, computed, watch, ref } from 'vue';
+import { onMounted, onBeforeUnmount, computed, watch, ref } from 'vue';
 import { NSwitch } from 'naive-ui';
 import HlsPlayer from '../components/HlsPlayer.vue';
 import './Home.css';
@@ -40,6 +40,7 @@ const {
   bufferStatus,
   dynamicBorderStyle: storeDynamicBorderStyle,
   isBroadcasting,
+  isWaitingForCurator,
   animationIntensity,
   stationColor
 } = storeToRefs( stationStore );
@@ -47,6 +48,24 @@ const {
 onMounted(async () => {
   await stationStore.fetchStations(false);
 } );
+
+const idleIntensity = ref(0);
+let idleAnimId = null;
+const startIdlePulse = () => {
+  const tick = (ts) => {
+    const t = ts / 1000;
+    idleIntensity.value = 0.1 + 0.15 * Math.sin(t * Math.PI);
+    idleAnimId = requestAnimationFrame(tick);
+  };
+  idleAnimId = requestAnimationFrame(tick);
+};
+onMounted(() => {
+  startIdlePulse();
+});
+onBeforeUnmount(() => {
+  if (idleAnimId) cancelAnimationFrame(idleAnimId);
+  idleAnimId = null;
+});
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));
 const radioParam = computed(() => urlParams.value.get('radio'));
@@ -101,9 +120,9 @@ const dynamicBorderStyle = computed( () => {
 
 const pulsingBorderStyle = computed( () => {
   if (uiStore.disableAnimations) return {};
-  if ( !isBroadcasting.value ) return {};
+  if (!isBroadcasting.value && !isWaitingForCurator.value) return {};
 
-  const intensity = animationIntensity.value;
+  const intensity = isBroadcasting.value ? animationIntensity.value : idleIntensity.value;
   const color = stationColor.value || '#FFA500';
 
   let r = 0, g = 0, b = 0;

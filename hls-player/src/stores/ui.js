@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { storageService } from '../services/storage';
 
 export const useUiStore = defineStore('ui', () => {
-  const theme = ref(storageService.getLastTheme() || 'light');
+  const theme = ref(storageService.getLastTheme() || 'dark');
   const disableAnimations = ref(storageService.getDisableAnimations() ?? false);
 
   function toggleTheme() {

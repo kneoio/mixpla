@@ -26,6 +26,7 @@ export const useStationStore = defineStore('station', {
     nowPlaying: '',
     isAsleep: false,
     isBroadcasting: false,
+    isWaitingForCurator: false,
     isWarmingUp: false,
     statusText: 'Loading...',
     pollingInterval: null,
@@ -185,6 +186,7 @@ export const useStationStore = defineStore('station', {
             this.stationColor = currentStation?.color || null;
             this.isAsleep = false;
             this.isBroadcasting = false;
+            this.isWaitingForCurator = false;
             this.djName = null;
             this.djStatus = null;
             this.nowPlaying = '';
@@ -225,7 +227,7 @@ export const useStationStore = defineStore('station', {
           this.nowPlaying = '';
           this.statusText = 'Redirecting...';
           this.isAsleep = false;
-
+          this.isWaitingForCurator = false;
           this.isBroadcasting = false;
           
           if (this.statusPollingInterval) {
@@ -252,6 +254,7 @@ export const useStationStore = defineStore('station', {
           this.stationColor = this.stationColor || '#6b7280';
           this.isAsleep = false;
           this.isBroadcasting = false;
+          this.isWaitingForCurator = false;
           this.djName = null;
           this.djStatus = null;
           this.nowPlaying = '';
@@ -294,9 +297,11 @@ export const useStationStore = defineStore('station', {
           this.statusText = 'Station is online, waiting for curator...';
           this.isAsleep = false;
           this.isBroadcasting = false;
+          this.isWaitingForCurator = true;
         } else {
           this.isAsleep = false;
           this.isBroadcasting = isOnlineStatus;
+          this.isWaitingForCurator = false;
           
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
@@ -328,6 +333,7 @@ export const useStationStore = defineStore('station', {
             if (typeof responseText === 'string' && responseText.includes("Radio station not broadcasting")) {
                 this.isAsleep = true;
                 this.isBroadcasting = false;
+                this.isWaitingForCurator = false;
                 this.statusText = 'Station is offline.';
                 const currentStation = this.stations.find(s => s.name === this.radioName);
                 this.stationName = currentStation?.displayName || this.stationName || this.radioName;
@@ -337,7 +343,7 @@ export const useStationStore = defineStore('station', {
         }
         console.error(`Failed to fetch station status for ${this.radioName}:`, error);
         this.isAsleep = false;
-
+        this.isWaitingForCurator = false;
         this.isBroadcasting = false;
         this.statusText = `Error: Could not fetch station status.`;
       }
@@ -376,6 +382,7 @@ export const useStationStore = defineStore('station', {
 
         this.isWarmingUp = true; 
         this.isBroadcasting = false;
+        this.isWaitingForCurator = false;
         this.djName = null;        this.djStatus = null;
         this.nowPlaying = ''; 
         this.statusText = 'Loading station information...';
