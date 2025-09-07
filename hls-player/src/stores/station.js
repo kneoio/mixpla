@@ -169,9 +169,12 @@ export const useStationStore = defineStore('station', {
           if (!targetStationName || !stationExists) {
             const realStations = this.stations;
             if (realStations.length > 0) {
-              this.radioName = realStations[0].name;
-              this.radioSlug = realStations[0].slugName || '';
-              storageService.saveLastStation(this.radioName);
+              this.statusText = 'Searching for a random online station...';
+              const activeStatuses = ['ONLINE', 'BROADCASTING'];
+              const onlineStations = realStations.filter(s => activeStatuses.includes(s.currentStatus));
+              const pick = onlineStations.length > 0 ? onlineStations[Math.floor(Math.random() * onlineStations.length)] : realStations[0];
+              this.radioName = pick.name;
+              this.radioSlug = pick.slugName || '';
             }
           } else {
             this.radioName = targetStationName;
@@ -187,9 +190,7 @@ export const useStationStore = defineStore('station', {
             this.nowPlaying = '';
             this.statusText = 'Loading station information...';
             
-            if (radioParam) {
-              storageService.saveLastStation(this.radioName);
-            }
+            
           }
           this.startPolling(); 
           this.startListPolling(); 
@@ -266,9 +267,7 @@ export const useStationStore = defineStore('station', {
           
           this.statusText = 'Limited station list (connection issue).';
           
-          if (radioParam) {
-            storageService.saveLastStation(targetStationName);
-          }
+          
           
           this.startPolling();
           this.startListPolling();
@@ -370,7 +369,6 @@ export const useStationStore = defineStore('station', {
           this.radioSlug = stationName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
         }
         
-        storageService.saveLastStation(stationName);
         
         this.stationName = stationData?.displayName || stationName;
         this.stationColor = stationData?.color || null;

@@ -1,5 +1,5 @@
 <template>
-  <div class="animated-text-container" :class="`animation-${animationType}`">
+  <div class="animated-text-container" :class="`animation-${animationType}`" :style="styleVars">
     <transition name="animFade" mode="out-in">
       <div v-if="animationType === 'gradient'" key="gradient" class="gradient-text">
         {{ parsedText.title }}<span v-if="parsedText.artist">  •  {{ parsedText.artist }}</span>
@@ -34,6 +34,42 @@ const props = defineProps({
   speed: {
     type: Number,
     default: 1
+  },
+  neonMode: {
+    type: String,
+    default: 'opposite'
+  },
+  neonRandomChance: {
+    type: Number,
+    default: 0.5
+  },
+  neonPalette: {
+    type: Array,
+    default: () => []
+  },
+  neonReseedOn: {
+    type: String,
+    default: 'text'
+  },
+  gradientPalettes: {
+    type: Array,
+    default: () => []
+  },
+  gradientMode: {
+    type: String,
+    default: 'random'
+  },
+  gradientIncludeStation: {
+    type: Boolean,
+    default: true
+  },
+  gradientChangeOn: {
+    type: String,
+    default: 'text'
+  },
+  gradientSpeedMultiplier: {
+    type: Number,
+    default: 1
   }
 })
 
@@ -55,6 +91,99 @@ const cssVariables = computed(() => ({
   '--station-color': props.stationColor,
   '--animation-speed': `${props.speed}s`
 }))
+
+const defaultNeonPalette = ['#39FF14','#FF073A','#FF6EC7','#00FFFF','#7DF9FF','#F4F269','#B026FF','#FF9900']
+const defaultGradientPalettes = [
+  ['#FF6EC7','#39FF14','#00FFFF'],
+  ['#FF073A','#F4F269','#7DF9FF'],
+  ['#B026FF','#FF9900','#00FFFF'],
+  ['#39FF14','#FF9900','#FF6EC7']
+]
+
+const selectedNeon = ref('')
+const selectedGradient = ref([])
+
+const hexToRgb = (hex) => {
+  let h = hex.replace('#','')
+  if (h.length === 3) h = h.split('').map(c=>c+c).join('')
+  const r = parseInt(h.substring(0,2),16)
+  const g = parseInt(h.substring(2,4),16)
+  const b = parseInt(h.substring(4,6),16)
+  return { r, g, b }
+}
+
+const toHex = (n) => n.toString(16).padStart(2,'0')
+const complementHex = (hex) => {
+  const { r, g, b } = hexToRgb(hex)
+  const cr = 255 - r
+  const cg = 255 - g
+  const cb = 255 - b
+  return `#${toHex(cr)}${toHex(cg)}${toHex(cb)}`
+}
+
+const getNeonPalette = computed(() => props.neonPalette.length ? props.neonPalette : defaultNeonPalette)
+const getGradientPalettes = computed(() => props.gradientPalettes.length ? props.gradientPalettes : defaultGradientPalettes)
+
+const reseedNeon = () => {
+  if (props.neonMode === 'opposite') {
+    selectedNeon.value = complementHex(props.stationColor)
+  } else if (props.neonMode === 'random') {
+    const pool = getNeonPalette.value
+    selectedNeon.value = pool[Math.floor(Math.random()*pool.length)]
+  } else {
+    const useOpposite = Math.random() >= (1 - props.neonRandomChance)
+    if (useOpposite) {
+      selectedNeon.value = complementHex(props.stationColor)
+    } else {
+      const pool = getNeonPalette.value
+      selectedNeon.value = pool[Math.floor(Math.random()*pool.length)]
+    }
+  }
+}
+
+const reseedGradient = () => {
+  const palettes = getGradientPalettes.value
+  if (!palettes.length) { selectedGradient.value = []; return }
+  if (props.gradientMode === 'sequential') {
+    const idx = Math.floor(Date.now() / 1000) % palettes.length
+    selectedGradient.value = palettes[idx]
+  } else {
+    selectedGradient.value = palettes[Math.floor(Math.random()*palettes.length)]
+  }
+}
+
+onMounted(() => {
+  reseedNeon()
+  reseedGradient()
+})
+
+watch(() => props.text, () => {
+  if (props.neonReseedOn === 'text') reseedNeon()
+  if (props.gradientChangeOn === 'text') reseedGradient()
+})
+
+watch(() => props.stationColor, () => {
+  if (props.neonMode !== 'random') reseedNeon()
+})
+
+const glowColor = computed(() => selectedNeon.value || props.stationColor)
+
+const gradientStops = computed(() => {
+  const stops = [...(selectedGradient.value || [])]
+  if (props.gradientIncludeStation) stops.push(props.stationColor)
+  return stops.join(', ')
+})
+
+const styleVars = computed(() => {
+  const animSpeed = props.animationType === 'gradient' ? (props.speed * props.gradientSpeedMultiplier) : props.speed
+  const style = {
+    '--animation-speed': `${animSpeed}s`
+  }
+  if (props.animationType === 'glow') style['--station-color'] = glowColor.value
+  else style['--station-color'] = props.stationColor
+  if (props.animationType === 'gradient') style['--gradient-stops'] = gradientStops.value
+  return style
+})
 </script>
 
 <style scoped>
@@ -65,15 +194,7 @@ const cssVariables = computed(() => ({
 }
 
 .gradient-text {
-  background: linear-gradient(
-    45deg,
-    var(--station-color),
-    #ff3366,
-    #ffcc00,
-    #00ccff,
-    #ff6600,
-    var(--station-color)
-  );
+  background: linear-gradient(45deg, var(--gradient-stops, var(--station-color), #ff3366, #ffcc00, #00ccff, #ff6600, var(--station-color)));
   background-size: 400% 400%;
   background-clip: text;
   -webkit-background-clip: text;
