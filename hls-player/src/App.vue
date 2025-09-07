@@ -10,7 +10,6 @@
     
     <div class="app-content">
       <router-view />
-      <AudioDiagnostics v-if="showDiagnostics" />
     </div>
     
 
@@ -76,19 +75,7 @@
       </div>
     </footer>
     
-    <!-- Diagnostics Toggle Button (only shown with ?debug=1 parameter) -->
-    <div v-if="debugMode" class="diagnostics-toggle">
-      <n-button 
-        @click="showDiagnostics = !showDiagnostics" 
-        type="primary" 
-        size="small"
-        style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"
-        class="no-round"
-        :round="false"
-      >
-        {{ showDiagnostics ? 'Hide Diagnostics' : 'Show Diagnostics' }}
-      </n-button>
-    </div>
+    
 
     </n-message-provider>
   </n-config-provider>
@@ -104,13 +91,11 @@ import { useStationStore } from './stores/station';
 
 import { storeToRefs } from 'pinia';
 import { VERSION } from './config/version';
-import AudioDiagnostics from './components/AudioDiagnostics.vue';
+ 
 
 const showMessageInput = ref(false);
 const messageText = ref('');
 let autoCloseTimer = null;
-
- 
 
 const messageInput = ref(null);
 
@@ -189,12 +174,7 @@ const stationStore = useStationStore();
 const { theme } = storeToRefs(uiStore);
 const { radioName } = storeToRefs(stationStore);
 
-const showDiagnostics = ref(false);
-
-const debugMode = computed(() => {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('debug') === '1' || urlParams.get('debug') === 'true';
-});
+ 
 
 const isAuthenticated = ref(true);
 

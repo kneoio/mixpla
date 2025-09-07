@@ -66,7 +66,6 @@
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
 import { useUiStore } from '../stores/ui';
 import { useStationStore } from '../stores/station';
-import { useSegmentStatsStore } from '../stores/segmentStats';
 import { storeToRefs } from 'pinia';
 import { NButton, NIcon, NSelect, NSlider, useMessage, NButtonGroup, NDropdown } from 'naive-ui';
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
@@ -89,7 +88,6 @@ const isStalled = ref(false);
 
 const uiStore = useUiStore();
 const stationStore = useStationStore();
-const segmentStatsStore = useSegmentStatsStore();
 const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, djName, djStatus, stationColor, titleAnimation, bufferStatus, stations } = storeToRefs(stationStore);
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));
@@ -97,6 +95,11 @@ const radioParam = computed(() => urlParams.value.get('radio'));
 const requestedStations = computed(() => radioParam.value ? radioParam.value.split(',').map(s => s.trim()) : []);
 
 const showStations = computed(() => requestedStations.value.length > 1);
+
+const isTrace = computed(() => {
+  const p = new URLSearchParams(window.location.search);
+  return p.get('trace') === '1';
+});
 
 const displayStations = computed(() => {
   if (requestedStations.value.length > 0) {
@@ -160,10 +163,7 @@ const handleDropdownSelect = (key) => {
   stationStore.setStation(key);
 };
 
-const isDebugMode = computed(() => {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('debug') === '1' || urlParams.get('debug') === 'true';
-});
+ 
 
 const displayedCuratorText = ref('');
 let typingTimeout = null;
@@ -173,6 +173,7 @@ let audioCtx = null;
 let analyser = null;
 let source = null;
 let animationFrameId = null;
+const lastTraceTs = ref(0);
 
 const isBuffering = computed(() => {
   return (isPlaying.value && ['critical', 'fatal'].includes(bufferStatus.value)) || 
@@ -271,7 +272,7 @@ const startOfflineRetry = () => {
   isRetryingOffline.value = true;
   offlineRetryInterval = setInterval(() => {
     if (isAsleep.value && radioSlug.value) {
-      console.log('[Player] Auto-retrying offline station...');
+      if (isTrace.value) console.log('[Player] Auto-retrying offline station...');
       initializeHls(radioSlug.value);
     } else if (!isAsleep.value) {
       stopOfflineRetry();
@@ -340,9 +341,9 @@ const togglePlay = () => {
     if (isAsleep.value && radioSlug.value) {
       if (isRetryingOffline.value) {
         stopOfflineRetry();
-        console.log('[Player] Stopped offline retry');
+        if (isTrace.value) console.log('[Player] Stopped offline retry');
       } else {
-        console.log('[Player] Starting offline retry...');
+        if (isTrace.value) console.log('[Player] Starting offline retry...');
         initializeHls(radioSlug.value);
         startOfflineRetry();
       }
@@ -418,11 +419,6 @@ function initializeHls(slug) {
   const cacheBuster = Date.now();
   const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${slug}/radio/stream.m3u8?cb=${cacheBuster}`;
 
-  if (isDebugMode.value) {
-    segmentStatsStore.resetStats();
-  }
-
-
   hls = new Hls({
     debug: false,
     enableWorker: true,
@@ -433,83 +429,7 @@ function initializeHls(slug) {
     liveMaxLatencyDuration: 10,
     fragLoadingTimeOut: 20000,
     manifestLoadingTimeOut: 10000,
-    levelLoadingTimeOut: 10000,
-    xhrSetup: (xhr, url) => {
-      if (!isDebugMode.value) return;
-      
-      const startTime = performance.now();
-      const segmentUrl = new URL(url);
-      const segmentType = segmentUrl.pathname.endsWith('.m3u8') ? 'manifest' : 'segment';
-      
-
-      if (isDebugMode.value) {
-        segmentStatsStore.addSegmentRequest({
-          url: url,
-          type: segmentType,
-          startTime: startTime
-        });
-      }
-      
-      xhr.addEventListener('loadend', () => {
-        const loadTime = performance.now() - startTime;
-        const isSuccess = xhr.status >= 200 && xhr.status < 300;
-        
-
-        stationStore.trackSegmentLoad(isSuccess);
-        
-        if (isSuccess && isDebugMode.value) {
-          segmentStatsStore.addSegmentSuccess({
-            url: url,
-            type: segmentType,
-            startTime: startTime
-          }, xhr.response);
-          
-          /*console.log(`[SEGMENT] Loaded ${segmentType}:`, {
-            url: url,
-            status: xhr.status,
-            size: xhr.response?.length || 0,
-            time: loadTime.toFixed(2) + 'ms'
-          });*/
-        }
-      });
-      
-      xhr.addEventListener('error', (error) => {
-        const segmentType = new URL(url).pathname.endsWith('.m3u8') ? 'manifest' : 'segment';
-        const errorType = xhr.status === 404 ? '404' : 'network_error';
-        
-        if (xhr.status === 404) {
-          stationStore.track404Error();
-        }
-        
-        if (isDebugMode.value) {
-          console.error(`[${errorType}] Failed to load ${segmentType}: ${url.split('/').pop()}`);
-          
-          segmentStatsStore.addSegmentError({
-            url: url,
-            type: segmentType,
-            startTime: performance.now(),
-            status: xhr.status,
-            error: error.message,
-            recoveryAttempt: recoveryAttempts + 1,
-            timestamp: new Date().toISOString()
-          }, error);
-          
-          console.error(`[SEGMENT] Failed to load ${segmentType}:`, {
-            url: url,
-            status: xhr.status,
-            error: error.message,
-            recoveryAttempt: recoveryAttempts + 1,
-            timestamp: new Date().toISOString()
-          });
-        }
-                
-        if (hls && !attemptRecovery(hls, errorType)) {
-          console.error('[HLS] Recovery failed, triggering full reload');
-          if (hls) hls.destroy();
-          initializeHls(slug);
-        }
-      });
-    }
+    levelLoadingTimeOut: 10000
   });
 
   hls.loadSource(streamUrl);
@@ -519,14 +439,9 @@ function initializeHls(slug) {
   window.hlsInstance = hls;
 
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    if (isDebugMode.value) {
-      console.log('[Player] Manifest parsed, ready to play...');
-    }
     if (!isStalled.value && userInitiatedPlay.value) {
       audioPlayer.value.play().catch(e => {
-        if (isDebugMode.value) {
-          console.error('Error on user-initiated play:', e);
-        }
+        
       });
     }
   });
@@ -534,21 +449,12 @@ function initializeHls(slug) {
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
     const fragTitle = data.frag.title;
     
-
-    if (isDebugMode && fragTitle && fragTitle !== stationStore.nowPlaying) {
-
-    }
-    
     if (fragTitle) {
       stationStore.nowPlaying = fragTitle;
     }
   });
 
   hls.on(Hls.Events.FRAG_BUFFERED, (event, data) => {
-    if (isDebugMode) {
-      console.log('[FRAG_BUFFERED] Fragment buffered:', data.frag);
-    }
-    
     if (stationStore.bufferStatus === 'stalling') {
       stationStore.setBufferStatus('ok');
     }
@@ -560,36 +466,27 @@ function initializeHls(slug) {
       isStalled.value = false;
     }
 
+    if (isTrace.value) {
+      const now = performance.now();
+      if (now - lastTraceTs.value > 5000) {
+        try {
+          const t = data && data.frag && (data.frag.title || data.frag.sn || '');
+          console.log('[trace] FRAG_BUFFERED', t);
+        } catch {}
+        lastTraceTs.value = now;
+      }
+    }
+
     if (hls && hls.media && hls.media.paused && !userPaused.value && !isStalled.value && ahead >= 3) {
-      if (isDebugMode.value) console.log('Auto-resume: sufficient buffer ahead', ahead.toFixed(2));
       hls.media.play().catch(e => {
         console.error('Failed to resume playback after buffering:', e);
       });
     }
   });
 
-
-  if (isDebugMode) {
-    hls.on(Hls.Events.LEVEL_UPDATED, () => {
-
-    });
-    
-    hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
-      if (data.frag.discontinuity) {
-
-      }
-    });
-    
-    hls.on(Hls.Events.FRAG_LOAD_ERROR, () => {
-
-    });
-  }
+ 
 
   hls.on(Hls.Events.ERROR, (event, data) => {
-    if (isDebugMode.value) {
-      console.error('[HLS ERROR]', data);
-    }
-    
     if (data.fatal) {
       console.error('HLS.js fatal error:', data);
       stationStore.setBufferStatus('fatal');
@@ -614,37 +511,16 @@ function initializeHls(slug) {
   });
 
   hls.on(Hls.Events.FRAG_LOAD_ERROR, (event, data) => {
-    if (isDebugMode) {
-      console.error('[FRAG_LOAD_ERROR] Failed to load fragment:', {
-        frag: data.frag,
-        response: data.response,
-        error: data.error
-      });
-    }
-    
     stationStore.trackSegmentLoad(false);
     
     if (hls && hls.media) {
-      console.log('Current buffer state:', {
-        buffered: hls.media.buffered.length > 0 ? hls.media.buffered : 'empty',
-        currentTime: hls.media.currentTime,
-        readyState: hls.media.readyState,
-        networkState: hls.media.networkState
-      });
       
-      if (hls.media.buffered.length > 0) {
-        console.log('Buffer ranges:');
-        for (let i = 0; i < hls.media.buffered.length; i++) {
-          console.log(`  ${i}: ${hls.media.buffered.start(i)} -> ${hls.media.buffered.end(i)}`);
-        }
-      }
     }
   });
 
   hls.on(Hls.Events.BUFFER_STALLED, (event, data) => {
     stationStore.setBufferStatus('stalling');
     isStalled.value = true;
-    if (isDebugMode.value) console.warn('[Player] Buffer stalled, continuing playback');
   });
 
 
@@ -695,35 +571,6 @@ function initializeHls(slug) {
   
 
   const bufferHealthInterval = setInterval(checkBufferHealth, 10000);
-  
-  if (isDebugMode) {
-    let lastCurrentTime = 0;
-    let lastTimeUpdate = Date.now();
-    
-    audioPlayer.value.addEventListener('seeking', () => {
-    });
-    
-    audioPlayer.value.addEventListener('seeked', () => {
-    });
-    
-    audioPlayer.value.addEventListener('timeupdate', () => {
-      if (!audioPlayer.value) return;
-      const currentTime = audioPlayer.value.currentTime;
-      const now = Date.now();
-      const timeDiff = Math.abs(currentTime - lastCurrentTime);
-      const realTimeDiff = (now - lastTimeUpdate) / 1000;
-      
-    
-      if (realTimeDiff > 0.5 && timeDiff > realTimeDiff + 2) {
-    
-      }
-      
-      lastCurrentTime = currentTime;
-      lastTimeUpdate = now;
-    });
-    
-
-  }
 };
 
 
