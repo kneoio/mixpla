@@ -6,7 +6,7 @@
     <div class="player-content">
       <div class="station-info" :style="darkThemeTextStyle">
         <h1 class="station-name">{{ stationName }}</h1>
-        <div class="curator-info" :style="[{ visibility: curatorText ? 'visible' : 'hidden' }, dynamicColorStyle]">
+        <div class="curator-info" :class="{ 'glow-once': glowOnce }" :style="[{ visibility: curatorText ? 'visible' : 'hidden' }, dynamicColorStyle]">
           {{ displayedCuratorText }}<span class="blinking-cursor" v-if="isTyping">|</span>
         </div>
       </div>
@@ -229,10 +229,17 @@ const darkThemeTextStyle = computed(() => {
   return {};
 });
 
-const startTypingAnimation = (text) => {
+const startTypingAnimation = (text, doGlow = false) => {
   if (typingTimeout) clearTimeout(typingTimeout);
   displayedCuratorText.value = '';
   isTyping.value = false;
+  if (doGlow) {
+    if (glowTimeout) clearTimeout(glowTimeout);
+    glowOnce.value = true;
+    glowTimeout = setTimeout(() => {
+      glowOnce.value = false;
+    }, 1300);
+  }
 
   if (text) {
     isTyping.value = true;
@@ -254,12 +261,12 @@ watch(curatorText, (newText, oldText) => {
   if (retypeInterval) clearInterval(retypeInterval);
   
   if (newText) {
-    startTypingAnimation(newText);
+    startTypingAnimation(newText, !oldText);
     retypeInterval = setInterval(() => {
-      startTypingAnimation(newText);
-    }, 15000);
+      startTypingAnimation(newText, false);
+    }, 30000);
   } else {
-    startTypingAnimation(null);
+    startTypingAnimation(null, false);
   }
 });
 
@@ -686,9 +693,11 @@ onBeforeUnmount(() => {
   }
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
   if (typingTimeout) clearTimeout(typingTimeout);
   if (retypeInterval) clearInterval(retypeInterval);
+  if (glowTimeout) clearTimeout(glowTimeout);
   stopOfflineRetry();
   if (audioCtx) {
     audioCtx.close();
@@ -764,6 +773,35 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
   margin-top: 4px;
   min-height: 1.2em; 
+}
+
+.glow-once {
+  animation: curatorGlowPulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) 1;
+  will-change: text-shadow, filter;
+}
+
+@keyframes curatorGlowPulse {
+  0% {
+    text-shadow:
+      0 0 3px currentColor,
+      0 0 6px currentColor,
+      0 0 9px currentColor;
+    filter: brightness(1);
+  }
+  50% {
+    text-shadow:
+      0 0 10px currentColor,
+      0 0 20px currentColor,
+      0 0 30px currentColor;
+    filter: brightness(1.12);
+  }
+  100% {
+    text-shadow:
+      0 0 3px currentColor,
+      0 0 6px currentColor,
+      0 0 9px currentColor;
+    filter: brightness(1);
+  }
 }
 
 .blinking-cursor {

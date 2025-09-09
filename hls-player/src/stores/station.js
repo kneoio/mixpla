@@ -291,6 +291,15 @@ export const useStationStore = defineStore('station', {
         this.djName = data.djName;
         this.djStatus = data.djStatus;
 
+        if (data.currentStatus === 'WARMING_UP') {
+          this.isAsleep = false;
+          this.isBroadcasting = false;
+          this.isWaitingForCurator = false;
+          this.isWarmingUp = true;
+          this.statusText = 'Warming up...';
+          return;
+        }
+
         const isOnlineStatus = data.currentStatus === 'ON_LINE' || data.currentStatus === 'QUEUE_SATURATED' || data.currentStatus === 'SYSTEM ERROR';
         
         if (isOnlineStatus && data.currentSong === 'Waiting for curator to start the broadcast...') {
@@ -298,10 +307,12 @@ export const useStationStore = defineStore('station', {
           this.isAsleep = false;
           this.isBroadcasting = false;
           this.isWaitingForCurator = true;
+          this.isWarmingUp = false;
         } else {
           this.isAsleep = false;
           this.isBroadcasting = isOnlineStatus;
           this.isWaitingForCurator = false;
+          this.isWarmingUp = false;
           
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
@@ -334,6 +345,7 @@ export const useStationStore = defineStore('station', {
                 this.isAsleep = true;
                 this.isBroadcasting = false;
                 this.isWaitingForCurator = false;
+                this.isWarmingUp = false;
                 this.statusText = 'Station is offline.';
                 const currentStation = this.stations.find(s => s.name === this.radioName);
                 this.stationName = currentStation?.displayName || this.stationName || this.radioName;
@@ -345,6 +357,7 @@ export const useStationStore = defineStore('station', {
         this.isAsleep = false;
         this.isWaitingForCurator = false;
         this.isBroadcasting = false;
+        this.isWarmingUp = false;
         this.statusText = `Error: Could not fetch station status.`;
       }
     },

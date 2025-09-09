@@ -41,6 +41,7 @@ const {
   dynamicBorderStyle: storeDynamicBorderStyle,
   isBroadcasting,
   isWaitingForCurator,
+  isWarmingUp,
   animationIntensity,
   stationColor
 } = storeToRefs( stationStore );
@@ -120,7 +121,7 @@ const dynamicBorderStyle = computed( () => {
 
 const pulsingBorderStyle = computed( () => {
   if (uiStore.disableAnimations) return {};
-  if (!isBroadcasting.value && !isWaitingForCurator.value) return {};
+  if (!isBroadcasting.value && !isWaitingForCurator.value && !isWarmingUp.value) return {};
 
   const intensity = isBroadcasting.value ? animationIntensity.value : idleIntensity.value;
   const color = stationColor.value || '#FFA500';
