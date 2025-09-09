@@ -185,6 +185,8 @@ const buttonIcon = computed(() => {
 });
 
 const isTyping = ref(false);
+const glowOnce = ref(false);
+let glowTimeout = null;
 
 const curatorText = computed(() => {
   if (djName.value && djStatus.value === 'CONTROLLING') {
@@ -658,6 +660,7 @@ onMounted(() => {
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
     }
+    stationStore.animationIntensity = 0;
   };
 
   audio.addEventListener('play', onPlay);

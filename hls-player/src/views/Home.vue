@@ -121,9 +121,9 @@ const dynamicBorderStyle = computed( () => {
 
 const pulsingBorderStyle = computed( () => {
   if (uiStore.disableAnimations) return {};
-  if (!isBroadcasting.value && !isWaitingForCurator.value && !isWarmingUp.value) return {};
+  if (!isBroadcasting.value) return {};
 
-  const intensity = isBroadcasting.value ? animationIntensity.value : idleIntensity.value;
+  const intensity = animationIntensity.value;
   const color = stationColor.value || '#FFA500';
 
   let r = 0, g = 0, b = 0;

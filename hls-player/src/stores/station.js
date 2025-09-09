@@ -291,15 +291,7 @@ export const useStationStore = defineStore('station', {
         this.djName = data.djName;
         this.djStatus = data.djStatus;
 
-        if (data.currentStatus === 'WARMING_UP') {
-          this.isAsleep = false;
-          this.isBroadcasting = false;
-          this.isWaitingForCurator = false;
-          this.isWarmingUp = true;
-          this.statusText = 'Warming up...';
-          return;
-        }
-
+        const isWarmingUpStatus = data.currentStatus === 'WARMING_UP';
         const isOnlineStatus = data.currentStatus === 'ON_LINE' || data.currentStatus === 'QUEUE_SATURATED' || data.currentStatus === 'SYSTEM ERROR';
         
         if (isOnlineStatus && data.currentSong === 'Waiting for curator to start the broadcast...') {
@@ -312,7 +304,7 @@ export const useStationStore = defineStore('station', {
           this.isAsleep = false;
           this.isBroadcasting = isOnlineStatus;
           this.isWaitingForCurator = false;
-          this.isWarmingUp = false;
+          this.isWarmingUp = isWarmingUpStatus;
           
           if (data.currentSong && data.currentSong.trim() !== '') {
             this.nowPlaying = data.currentSong;
@@ -321,7 +313,7 @@ export const useStationStore = defineStore('station', {
           let displayMessageParts = [];
           if (data.countryCode) displayMessageParts.push(`Country: ${data.countryCode}`);
           if (data.djName) displayMessageParts.push(`DJ: ${data.djName}`);
-          if (data.djStatus && data.djStatus !== 'CONTROLLING') displayMessageParts.push('offline');
+          if (data.djStatus !== 'CONTROLLING') displayMessageParts.push('offline');
           this.statusText = displayMessageParts.join(', ');
         }
         
