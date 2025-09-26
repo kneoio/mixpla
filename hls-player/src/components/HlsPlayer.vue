@@ -46,16 +46,28 @@
         </n-button-group>
       </div>
       
-      <n-button 
-        @click="shareWithFriend" 
-        class="share-button"
-        circle
-        secondary
-      >
-        <template #icon>
-          <n-icon><Share /></n-icon>
-        </template>
-      </n-button>
+      <div class="inline-actions">
+        <n-button 
+          @click="shareWithFriend" 
+          class="share-button"
+          circle
+          secondary
+        >
+          <template #icon>
+            <n-icon><Share /></n-icon>
+          </template>
+        </n-button>
+        <n-button 
+          @click="goMixpla" 
+          class="share-button"
+          circle
+          secondary
+        >
+          <template #icon>
+            <n-icon><Home2 /></n-icon>
+          </template>
+        </n-button>
+      </div>
     </div>
 
 
@@ -71,6 +83,7 @@ import { NButton, NIcon, NSelect, NSlider, useMessage, NButtonGroup, NDropdown }
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Share from '@vicons/tabler/es/Share';
+import Home2 from '@vicons/tabler/es/Home2';
 import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
 import playWaitIcon from '/play_wait.svg';
@@ -174,6 +187,7 @@ let analyser = null;
 let source = null;
 let animationFrameId = null;
 const lastTraceTs = ref(0);
+let bufferHealthInterval = null;
 
 const isBuffering = computed(() => {
   return (isPlaying.value && ['critical', 'fatal'].includes(bufferStatus.value)) || 
@@ -315,6 +329,7 @@ watch(
       
       // Destroy existing HLS instance
       if (hls) {
+        try { hls.stopLoad(); } catch {}
         hls.destroy();
         hls = null;
       }
@@ -409,6 +424,7 @@ function initializeHls(slug) {
   resetRecoveryState();
   
   if (hls) {
+    try { hls.stopLoad(); } catch {}
     hls.destroy();
     hls = null;
   }
@@ -579,7 +595,11 @@ function initializeHls(slug) {
   }
   
 
-  const bufferHealthInterval = setInterval(checkBufferHealth, 10000);
+  if (bufferHealthInterval) {
+    clearInterval(bufferHealthInterval);
+    bufferHealthInterval = null;
+  }
+  bufferHealthInterval = setInterval(checkBufferHealth, 10000);
 };
 
 
@@ -690,8 +710,13 @@ const shareWithFriend = async () => {
   }
 };
 
+const goMixpla = () => {
+  window.location.href = 'https://mixpla.io';
+};
+
 onBeforeUnmount(() => {
   if (hls) {
+    try { hls.stopLoad(); } catch {}
     hls.destroy();
   }
   if (animationFrameId) {
@@ -701,6 +726,10 @@ onBeforeUnmount(() => {
   if (typingTimeout) clearTimeout(typingTimeout);
   if (retypeInterval) clearInterval(retypeInterval);
   if (glowTimeout) clearTimeout(glowTimeout);
+  if (bufferHealthInterval) {
+    clearInterval(bufferHealthInterval);
+    bufferHealthInterval = null;
+  }
   stopOfflineRetry();
   if (audioCtx) {
     audioCtx.close();
@@ -769,6 +798,13 @@ onBeforeUnmount(() => {
   background: transparent !important;
   transform: translateY(-1px);
   box-shadow: none !important;
+}
+
+.inline-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .curator-info {
