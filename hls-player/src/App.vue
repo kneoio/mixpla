@@ -2,184 +2,26 @@
   <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
     <n-message-provider>
       <n-global-style />
-    <div id="nav">
-      <!--hide for now-->
-      <!--<router-link to="/">Home</router-link> | -->
-      <!--<router-link to="/profile">Profile</router-link>-->
-    </div>
     
     <div class="app-content">
       <router-view />
     </div>
     
-
     <footer>
-      <p class="version-text">v.{{ VERSION }}</p>
-      <div class="message-section">
-        <div v-if="isAuthenticated">
-          <transition name="fade" mode="out-in">
-            <div v-if="!showMessageInput" key="button" class="message-button-wrapper">
-              <n-button 
-                @click="toggleMessageInput" 
-                class="message-button invisible-button no-round"
-                size="large"
-                text
-                :round="false"
-              >
-              </n-button>
-            </div>
-            <div v-else key="input" class="message-input-wrapper">
-              <n-input
-                v-model:value="messageText"
-                type="textarea"
-                placeholder="Type your message here..."
-                :autosize="{
-                  minRows: 4,
-                  maxRows: 4
-                }"
-                @keydown.enter.exact.prevent="handleMessageSubmit"
-                class="message-textarea"
-                ref="messageInput"
-                @vue:mounted="focusMessageInput"
-              />
-              <div class="message-actions">
-                <n-button 
-                  @click="handleMessageSubmit" 
-                  :disabled="!messageText.trim()"
-                  class="send-button gradient-button no-round"
-                  size="large"
-                  :round="false"
-                >
-                  <template #icon>
-                    <n-icon :component="Comet" size="20" />
-                  </template>
-                </n-button>
-                <n-button 
-                  @click="cancelMessage" 
-                  class="cancel-button no-round"
-                  size="small"
-                  secondary
-                  :round="false"
-                  :style="{ '--n-border-radius': '0px' }"
-                >
-                  <template #icon>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
-                  </template>
-                </n-button>
-              </div>
-            </div>
-          </transition>
-        </div>
-      </div>
+      <p class="version-text">v.{{ VERSION }}</p>     
     </footer>
-    
-    
 
-    </n-message-provider>
+  </n-message-provider>
   </n-config-provider>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { NConfigProvider, NGlobalStyle, NButton, NInput, NIcon, NMessageProvider } from 'naive-ui';
-import { Comet } from '@vicons/tabler';
+import { computed, watch } from 'vue';
+import { NConfigProvider, NGlobalStyle, NMessageProvider } from 'naive-ui';
 import { darkTheme } from 'naive-ui';
 import { useUiStore } from './stores/ui';
-import { useStationStore } from './stores/station';
-
-import { storeToRefs } from 'pinia';
 import { VERSION } from './config/version';
- 
-
-const showMessageInput = ref(false);
-const messageText = ref('');
-let autoCloseTimer = null;
-
-const messageInput = ref(null);
-
-const focusMessageInput = () => {
-  if (messageInput.value) {
-    messageInput.value.focus();
-  }
-};
-
-const toggleMessageInput = () => {
-  console.log('// Toggle message input visibility');
-  showMessageInput.value = !showMessageInput.value;
-  if (showMessageInput.value) {
-    startAutoCloseTimer();
-    nextTick(() => {
-      const textarea = document.querySelector('.message-textarea textarea');
-      if (textarea) {
-        textarea.focus();
-      }
-    });
-  } else {
-    clearAutoCloseTimer();
-  }
-};
-
-const startAutoCloseTimer = () => {
-  clearAutoCloseTimer(); 
-  autoCloseTimer = setTimeout(() => {
-    if (showMessageInput.value) {
-      cancelMessage();
-    }
-  }, 30000); // 30 seconds
-};
-
-const clearAutoCloseTimer = () => {
-  if (autoCloseTimer) {
-    clearTimeout(autoCloseTimer);
-    autoCloseTimer = null;
-  }
-};
-
-const handleMessageSubmit = async () => {
-  if (!messageText.value.trim()) return;
-  
-  try {
-    console.log('Sending message to server:', messageText.value);
-    
-    // Get current station brand for the message
-    const currentBrand = stationStore.radioName || 'aizoo';
-    
-    // Send message to server
-    await sendMessage(messageText.value, currentBrand);
-    
-    console.log('Message sent successfully');
-    window.$message?.success('Message sent!');
-    
-    // Clear the input and close
-    messageText.value = '';
-    showMessageInput.value = false;
-    clearAutoCloseTimer();
-  } catch (error) {
-    console.error('Failed to send message:', error);
-    window.$message?.error('Failed to send message. Please try again.');
-  }
-};
-
-const cancelMessage = () => {
-  messageText.value = '';
-  showMessageInput.value = false;
-  clearAutoCloseTimer();
-};
-
 const uiStore = useUiStore();
-const stationStore = useStationStore();
-
-const { theme } = storeToRefs(uiStore);
-const { radioName } = storeToRefs(stationStore);
-
- 
-
-const isAuthenticated = ref(true);
-
- 
-
 const naiveTheme = computed(() => (uiStore.theme === 'dark' ? darkTheme : null));
 
 const themeOverrides = {
@@ -325,27 +167,6 @@ footer {
   margin: 0 auto;
 }
 
-/* Message section styles */
-.message-section {
-  width: 100%;
-  margin-top: 1.5rem;
-  transition: all 0.3s ease;
-}
-
-.message-button-wrapper {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-.message-button {
-  width: 100%;
-  max-width: 200px;
-  transition: all 0.2s ease;
-  background-color: #18a058;
-  margin: 0 auto;
-}
-
 .gradient-button {
   min-width: 48px !important;
   width: 48px !important;
@@ -369,59 +190,6 @@ footer {
   color: #2563eb !important;
   transform: scale(1.05) !important;
 }
-
-.invisible-button {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  color: transparent !important;
-  min-height: 60px !important;
-  min-width: 100% !important;
-  max-width: 100% !important;
-  padding: 20px !important;
-  cursor: pointer;
-}
-
-.invisible-button:hover {
-  background: transparent !important;
-  transform: none !important;
-}
-
-.message-button:hover {
-  transform: translateY(-1px);
-  background-color: #36ad6a;
-}
-
-.message-input-wrapper {
-  width: 100%;
-  max-width: 400px;
-  margin: 0 auto;
-  padding: 0 1rem;
-}
-
-.message-textarea {
-  width: 100%;
-  margin-bottom: 0.5rem;
-  border-radius: 8px;
-  transition: border-color 0.3s ease;
-}
-
-.message-textarea textarea {
-  text-align: left !important;
-}
-
-.message-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.cancel-button {
-  color: #666;
-}
-
 /* Animation */
 .fade-enter-active,
 .fade-leave-active {
