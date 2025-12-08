@@ -48,6 +48,17 @@
       
       <div class="inline-actions">
         <n-button 
+          @click="onDislikeClick" 
+          class="reaction-button"
+          circle
+          secondary
+          :style="dislikeButtonStyle"
+        >
+          <template #icon>
+            <n-icon><HandMiddleFinger /></n-icon>
+          </template>
+        </n-button>
+        <n-button 
           @click="shareWithFriend" 
           class="share-button"
           circle
@@ -67,6 +78,17 @@
             <n-icon><Home2 /></n-icon>
           </template>
         </n-button>
+        <n-button 
+          @click="onLikeClick" 
+          class="reaction-button"
+          circle
+          secondary
+          :style="likeButtonStyle"
+        >
+          <template #icon>
+            <n-icon><HandRock /></n-icon>
+          </template>
+        </n-button>
       </div>
     </div>
 
@@ -84,10 +106,13 @@ import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Share from '@vicons/tabler/es/Share';
 import Home2 from '@vicons/tabler/es/Home2';
+import HandRock from '@vicons/tabler/es/HandRock';
+import HandMiddleFinger from '@vicons/tabler/es/HandMiddleFinger';
 import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
 import playWaitIcon from '/play_wait.svg';
 import playWaitIconWhite from '/play_wait_white.svg';
+import { publicApiClient } from '../services/api';
 
 const emit = defineEmits(['play-state']);
 
@@ -102,6 +127,11 @@ const isStalled = ref(false);
 const uiStore = useUiStore();
 const stationStore = useStationStore();
 const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, djName, djStatus, stationColor, titleAnimation, bufferStatus, stations } = storeToRefs(stationStore);
+
+const currentReaction = ref(null);
+const likeColor = ref(null);
+const dislikeColor = ref(null);
+const sendingReaction = ref(false);
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));
 const radioParam = computed(() => urlParams.value.get('radio'));
@@ -231,6 +261,109 @@ const displayStatusText = computed(() => {
     return 'Station is offline';
   }
   return statusText.value;
+});
+
+const randomReactionColor = () => {
+  const letters = '0123456789ABCDEF';
+  let color = '#';
+  for (let i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
+  }
+  return color;
+};
+
+const resetReaction = () => {
+  currentReaction.value = null;
+  likeColor.value = null;
+  dislikeColor.value = null;
+};
+
+const onLikeClick = () => {
+  if (currentReaction.value === 'like') {
+    resetReaction();
+    return;
+  }
+  currentReaction.value = 'like';
+  likeColor.value = randomReactionColor();
+  dislikeColor.value = null;
+};
+
+const onDislikeClick = () => {
+  if (currentReaction.value === 'dislike') {
+    resetReaction();
+    return;
+  }
+  currentReaction.value = 'dislike';
+  dislikeColor.value = randomReactionColor();
+  likeColor.value = null;
+};
+
+const likeButtonStyle = computed(() => {
+  if (!likeColor.value) {
+    return {
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderColor: 'transparent',
+      boxShadow: 'none',
+      outline: 'none',
+      color: '#888888'
+    };
+  }
+  return {
+    backgroundColor: likeColor.value,
+    border: 'none',
+    boxShadow: 'none',
+    outline: 'none',
+    color: '#000000'
+  };
+});
+
+const dislikeButtonStyle = computed(() => {
+  if (!dislikeColor.value) {
+    return {
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderColor: 'transparent',
+      boxShadow: 'none',
+      outline: 'none',
+      color: '#888888'
+    };
+  }
+  return {
+    backgroundColor: dislikeColor.value,
+    border: 'none',
+    boxShadow: 'none',
+    outline: 'none',
+    color: '#000000'
+  };
+});
+
+const sendReactionIfNeeded = async (songTitle) => {
+  if (!currentReaction.value || !songTitle || !radioSlug.value) {
+    resetReaction();
+    return;
+  }
+  if (sendingReaction.value) {
+    return;
+  }
+  sendingReaction.value = true;
+  try {
+    await publicApiClient.post(`/${radioSlug.value}/radio/feedback`, {
+      song: songTitle,
+      reaction: currentReaction.value,
+    });
+  } catch (e) {
+    console.error('Failed to send reaction:', e);
+  } finally {
+    sendingReaction.value = false;
+    resetReaction();
+  }
+};
+
+watch(nowPlaying, (newVal, oldVal) => {
+  if (oldVal && newVal && newVal !== oldVal) {
+    sendReactionIfNeeded(oldVal);
+  }
 });
 
  
@@ -711,7 +844,12 @@ const shareWithFriend = async () => {
 };
 
 const goMixpla = () => {
-  window.location.href = 'https://mixpla.io';
+  const slug = (radioSlug && radioSlug.value) || (radioName && radioName.value) || '';
+  if (!slug) {
+    window.location.href = 'https://mixpla.io';
+    return;
+  }
+  window.location.href = `https://mixpla.io/${slug}`;
 };
 
 onBeforeUnmount(() => {
@@ -805,6 +943,17 @@ onBeforeUnmount(() => {
   flex-direction: row;
   align-items: center;
   gap: 0.5rem;
+}
+
+.reaction-button {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.reaction-button .n-button__border,
+.reaction-button .n-button__state-border {
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .curator-info {
