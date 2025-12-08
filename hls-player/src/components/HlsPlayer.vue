@@ -5,7 +5,7 @@
 
     <div class="player-content">
       <div class="station-info" :style="darkThemeTextStyle">
-        <h1 class="station-name">{{ stationName }}</h1>
+        <h1 class="station-name" :style="stationNameStyle">{{ stationName }}</h1>
         <div class="curator-info" :class="{ 'glow-once': glowOnce }" :style="[{ visibility: curatorText ? 'visible' : 'hidden' }, dynamicColorStyle]">
           {{ displayedCuratorText }}<span class="blinking-cursor" v-if="isTyping">|</span>
         </div>
@@ -53,6 +53,7 @@
           circle
           secondary
           :style="dislikeButtonStyle"
+          :disabled="sendingReaction"
         >
           <template #icon>
             <n-icon><HandMiddleFinger /></n-icon>
@@ -84,6 +85,7 @@
           circle
           secondary
           :style="likeButtonStyle"
+          :disabled="sendingReaction"
         >
           <template #icon>
             <n-icon><HandRock /></n-icon>
@@ -112,7 +114,7 @@ import Hls from 'hls.js';
 import AnimatedText from './AnimatedText.vue';
 import playWaitIcon from '/play_wait.svg';
 import playWaitIconWhite from '/play_wait_white.svg';
-import { publicApiClient } from '../services/api';
+import { rateTrack } from '../services/api';
 
 const emit = defineEmits(['play-state']);
 
@@ -129,9 +131,53 @@ const stationStore = useStationStore();
 const { radioName, radioSlug, stationName, statusText, nowPlaying, isAsleep, djName, djStatus, stationColor, titleAnimation, bufferStatus, stations } = storeToRefs(stationStore);
 
 const currentReaction = ref(null);
+const previousReaction = ref(null);
 const likeColor = ref(null);
 const dislikeColor = ref(null);
 const sendingReaction = ref(false);
+const currentSequence = ref(null);
+const buttonsDisabled = ref(false);
+let buttonEnableTimer = null;
+
+const stationFonts = [
+  'Goldman',
+  'Digital Play Italic St',
+  'Airborne',
+  'AncientGod',
+  'Apollo',
+  'Cubic',
+  'DigitalPlay',
+  'Drexs',
+  'Elias',
+  'FutureSallow',
+  'Goodtime',
+  'GameOfSquids',
+  'Glypic',
+  'Icklips',
+  'Moto',
+  'MontereyPopsicle',
+  'PolenticalNeon',
+  'Venta',
+  'Conthrax',
+  'Kaylon',
+  'Nsecthin',
+  'Yonder'
+];
+
+const useDefaultStationFont = Math.random() < 0.5;
+
+const stationFontFamily = ref(
+  useDefaultStationFont
+    ? null
+    : stationFonts[Math.floor(Math.random() * stationFonts.length)]
+);
+console.log('[Mixpla] Station font selected:', stationFontFamily.value || 'DEFAULT_SYSTEM_FONT');
+
+const stationNameStyle = computed(() => (
+  stationFontFamily.value
+    ? { '--station-font': stationFontFamily.value }
+    : {}
+));
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));
 const radioParam = computed(() => urlParams.value.get('radio'));
@@ -273,29 +319,38 @@ const randomReactionColor = () => {
 };
 
 const resetReaction = () => {
+  previousReaction.value = null;
   currentReaction.value = null;
   likeColor.value = null;
   dislikeColor.value = null;
 };
 
-const onLikeClick = () => {
+const onLikeClick = async () => {
+  if (buttonsDisabled.value) return;
   if (currentReaction.value === 'like') {
+    await sendRating('CANCEL', 'LIKE');
     resetReaction();
     return;
   }
+  previousReaction.value = currentReaction.value;
   currentReaction.value = 'like';
   likeColor.value = randomReactionColor();
   dislikeColor.value = null;
+  await sendRating('LIKE');
 };
 
-const onDislikeClick = () => {
+const onDislikeClick = async () => {
+  if (buttonsDisabled.value) return;
   if (currentReaction.value === 'dislike') {
+    await sendRating('CANCEL', 'DISLIKE');
     resetReaction();
     return;
   }
+  previousReaction.value = currentReaction.value;
   currentReaction.value = 'dislike';
   dislikeColor.value = randomReactionColor();
   likeColor.value = null;
+  await sendRating('DISLIKE');
 };
 
 const likeButtonStyle = computed(() => {
@@ -306,7 +361,9 @@ const likeButtonStyle = computed(() => {
       borderColor: 'transparent',
       boxShadow: 'none',
       outline: 'none',
-      color: '#888888'
+      color: '#888888',
+      opacity: buttonsDisabled.value ? 0.3 : 1,
+      cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
     };
   }
   return {
@@ -314,7 +371,9 @@ const likeButtonStyle = computed(() => {
     border: 'none',
     boxShadow: 'none',
     outline: 'none',
-    color: '#000000'
+    color: '#000000',
+    opacity: buttonsDisabled.value ? 0.3 : 1,
+    cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
   };
 });
 
@@ -326,7 +385,9 @@ const dislikeButtonStyle = computed(() => {
       borderColor: 'transparent',
       boxShadow: 'none',
       outline: 'none',
-      color: '#888888'
+      color: '#888888',
+      opacity: buttonsDisabled.value ? 0.3 : 1,
+      cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
     };
   }
   return {
@@ -334,13 +395,14 @@ const dislikeButtonStyle = computed(() => {
     border: 'none',
     boxShadow: 'none',
     outline: 'none',
-    color: '#000000'
+    color: '#000000',
+    opacity: buttonsDisabled.value ? 0.3 : 1,
+    cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
   };
 });
 
-const sendReactionIfNeeded = async (songTitle) => {
-  if (!currentReaction.value || !songTitle || !radioSlug.value) {
-    resetReaction();
+const sendRating = async (action, previousAction = null) => {
+  if (!radioSlug.value || currentSequence.value === null || typeof currentSequence.value === 'undefined') {
     return;
   }
   if (sendingReaction.value) {
@@ -348,21 +410,24 @@ const sendReactionIfNeeded = async (songTitle) => {
   }
   sendingReaction.value = true;
   try {
-    await publicApiClient.post(`/${radioSlug.value}/radio/feedback`, {
-      song: songTitle,
-      reaction: currentReaction.value,
-    });
+    await rateTrack(radioSlug.value, currentSequence.value, action, previousAction);
   } catch (e) {
-    console.error('Failed to send reaction:', e);
+    console.error('Failed to send rating:', e);
   } finally {
     sendingReaction.value = false;
-    resetReaction();
   }
 };
 
 watch(nowPlaying, (newVal, oldVal) => {
   if (oldVal && newVal && newVal !== oldVal) {
-    sendReactionIfNeeded(oldVal);
+    resetReaction();
+    buttonsDisabled.value = true;
+    if (buttonEnableTimer) {
+      clearTimeout(buttonEnableTimer);
+    }
+    buttonEnableTimer = setTimeout(() => {
+      buttonsDisabled.value = false;
+    }, 30000);
   }
 });
 
@@ -605,8 +670,13 @@ function initializeHls(slug) {
   });
   
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
-    const fragTitle = data.frag.title;
-    
+    const frag = data && data.frag ? data.frag : {};
+    const fragTitle = frag.title;
+    if (typeof frag.sn !== 'undefined') {
+      currentSequence.value = frag.sn;
+    } else {
+      currentSequence.value = null;
+    }
     if (fragTitle) {
       stationStore.nowPlaying = fragTitle;
     }
@@ -916,6 +986,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: var(--station-font), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
 .station-status {

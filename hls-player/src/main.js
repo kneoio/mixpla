@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import './style.css';
+import './assets/fonts/fonts.css';
 import App from './App.vue';
 import naive from 'naive-ui';
 import { createPinia } from 'pinia';

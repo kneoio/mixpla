@@ -36,5 +36,18 @@ export const sendMessage = async (message, brand = 'aizoo') => {
   }
 };
 
+export const rateTrack = async (brand, trackId, action, previousAction = null) => {
+  const body = { action };
+  if (previousAction) {
+    body.previousAction = previousAction;
+  }
+  const response = await apiClient.patch(`/radio/${brand}/${trackId}/rating`, body, {
+    headers: {
+      'X-Client-ID': 'mixpla-web'
+    }
+  });
+  return response.data;
+};
+
 export default apiClient;
 export { publicApiClient };
