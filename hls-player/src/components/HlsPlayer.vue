@@ -53,7 +53,7 @@
           circle
           secondary
           :style="dislikeButtonStyle"
-          :disabled="sendingReaction"
+          :disabled="reactionsDisabled"
         >
           <template #icon>
             <n-icon><HandMiddleFinger /></n-icon>
@@ -85,7 +85,7 @@
           circle
           secondary
           :style="likeButtonStyle"
-          :disabled="sendingReaction"
+          :disabled="reactionsDisabled"
         >
           <template #icon>
             <n-icon><HandRock /></n-icon>
@@ -178,6 +178,10 @@ const stationNameStyle = computed(() => (
     ? { '--station-font': stationFontFamily.value }
     : {}
 ));
+
+const reactionsDisabled = computed(() =>
+  buttonsDisabled.value || isAsleep.value || !isPlaying.value
+);
 
 const urlParams = computed(() => new URLSearchParams(window.location.search));
 const radioParam = computed(() => urlParams.value.get('radio'));
@@ -326,7 +330,7 @@ const resetReaction = () => {
 };
 
 const onLikeClick = async () => {
-  if (buttonsDisabled.value) return;
+  if (reactionsDisabled.value) return;
   if (currentReaction.value === 'like') {
     await sendRating('CANCEL', 'LIKE');
     resetReaction();
@@ -340,7 +344,7 @@ const onLikeClick = async () => {
 };
 
 const onDislikeClick = async () => {
-  if (buttonsDisabled.value) return;
+  if (reactionsDisabled.value) return;
   if (currentReaction.value === 'dislike') {
     await sendRating('CANCEL', 'DISLIKE');
     resetReaction();
@@ -362,8 +366,8 @@ const likeButtonStyle = computed(() => {
       boxShadow: 'none',
       outline: 'none',
       color: '#888888',
-      opacity: buttonsDisabled.value ? 0.3 : 1,
-      cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
+      opacity: reactionsDisabled.value ? 0.3 : 1,
+      cursor: reactionsDisabled.value ? 'not-allowed' : 'pointer'
     };
   }
   return {
@@ -372,8 +376,8 @@ const likeButtonStyle = computed(() => {
     boxShadow: 'none',
     outline: 'none',
     color: '#000000',
-    opacity: buttonsDisabled.value ? 0.3 : 1,
-    cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
+    opacity: reactionsDisabled.value ? 0.3 : 1,
+    cursor: reactionsDisabled.value ? 'not-allowed' : 'pointer'
   };
 });
 
@@ -386,8 +390,8 @@ const dislikeButtonStyle = computed(() => {
       boxShadow: 'none',
       outline: 'none',
       color: '#888888',
-      opacity: buttonsDisabled.value ? 0.3 : 1,
-      cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
+      opacity: reactionsDisabled.value ? 0.3 : 1,
+      cursor: reactionsDisabled.value ? 'not-allowed' : 'pointer'
     };
   }
   return {
@@ -396,8 +400,8 @@ const dislikeButtonStyle = computed(() => {
     boxShadow: 'none',
     outline: 'none',
     color: '#000000',
-    opacity: buttonsDisabled.value ? 0.3 : 1,
-    cursor: buttonsDisabled.value ? 'not-allowed' : 'pointer'
+    opacity: reactionsDisabled.value ? 0.3 : 1,
+    cursor: reactionsDisabled.value ? 'not-allowed' : 'pointer'
   };
 });
 
