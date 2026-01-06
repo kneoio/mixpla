@@ -161,6 +161,7 @@ export const useStationStore = defineStore('station', {
             if (targetStation) {
               targetStationName = targetStation.name;
             } else {
+              console.warn(`Station "${radioParam}" not found. Available stations:`, this.stations.map(s => s.slugName).join(', '));
               targetStationName = radioParam;
             }
           }
