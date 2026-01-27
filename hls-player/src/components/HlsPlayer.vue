@@ -70,13 +70,13 @@
           </template>
         </n-button>
         <n-button 
-          @click="goMixpla" 
-          class="share-button"
+          @click="goChat" 
+          class="chat-button"
           circle
           secondary
         >
           <template #icon>
-            <n-icon><Home2 /></n-icon>
+            <n-icon><MessageCircle /></n-icon>
           </template>
         </n-button>
         <n-button 
@@ -107,7 +107,7 @@ import { NButton, NIcon, NSelect, NSlider, useMessage, NButtonGroup, NDropdown }
 import PlayerPlay from '@vicons/tabler/es/PlayerPlay';
 import PlayerPause from '@vicons/tabler/es/PlayerPause';
 import Share from '@vicons/tabler/es/Share';
-import Home2 from '@vicons/tabler/es/Home2';
+import MessageCircle from '@vicons/tabler/es/MessageCircle';
 import HandRock from '@vicons/tabler/es/HandRock';
 import HandMiddleFinger from '@vicons/tabler/es/HandMiddleFinger';
 import Hls from 'hls.js';
@@ -917,13 +917,13 @@ const shareWithFriend = async () => {
   }
 };
 
-const goMixpla = () => {
+const goChat = () => {
   const slug = (radioSlug && radioSlug.value) || (radioName && radioName.value) || '';
   if (!slug) {
-    window.location.href = 'https://mixpla.io';
+    window.open('https://mixpla.io', '_blank');
     return;
   }
-  window.location.href = `https://mixpla.io/${slug}`;
+  window.open(`https://mixpla.io/${slug}/chat`, '_blank');
 };
 
 onBeforeUnmount(() => {
@@ -997,6 +997,20 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: #aaa;
   min-height: 1em; 
+}
+
+.chat-button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #888 !important;
+  transition: all 0.3s ease;
+}
+
+.chat-button:hover {
+  background: transparent !important;
+  transform: translateY(-1px);
+  box-shadow: none !important;
 }
 
 .share-button {
