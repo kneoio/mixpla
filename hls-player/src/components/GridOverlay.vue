@@ -39,7 +39,7 @@ const gridStyle = computed(() => ({
 .grid-overlay {
   position: fixed;
   inset: 0;
-  pointer-events: all;
+  pointer-events: none;
   opacity: 1;
   z-index: 10;
 }
