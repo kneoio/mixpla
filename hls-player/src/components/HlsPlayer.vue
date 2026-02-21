@@ -643,8 +643,7 @@ function initializeHls(slug) {
     return;
   }
 
-  const cacheBuster = Date.now();
-  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${slug}/radio/stream.m3u8?cb=${cacheBuster}`;
+  const streamUrl = `${import.meta.env.VITE_STREAM_BASE_URL}/${slug}/radio/master.m3u8`;
 
   hls = new Hls({
     debug: false,
@@ -672,6 +671,19 @@ function initializeHls(slug) {
       });
     }
   });
+
+  hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+    const level = hls.levels && hls.levels[data.level];
+    if (level) {
+      const url = level.url && level.url[0] ? level.url[0] : (level.uri || '');
+      const match = url.match(/[?&]bitrate=(\d+)/);
+      if (match) {
+        stationStore.currentBitrate = parseInt(match[1], 10);
+      } else if (level.bitrate) {
+        stationStore.currentBitrate = level.bitrate;
+      }
+    }
+  });
   
   hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
     const frag = data && data.frag ? data.frag : {};
@@ -690,6 +702,7 @@ function initializeHls(slug) {
     if (stationStore.bufferStatus === 'stalling') {
       stationStore.setBufferStatus('ok');
     }
+    
     
     stationStore.trackSegmentLoad(true);
     

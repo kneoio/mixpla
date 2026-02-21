@@ -62,6 +62,15 @@
   transition: background-color 0.3s ease;
 }
 
+.bandwidth-label {
+  margin-left: 8px;
+  font-size: 11px;
+  font-family: monospace;
+  color: #999;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .buffer-indicator.healthy {
   background-color: #4caf50; /* Bright Green - Excellent buffer */
 }

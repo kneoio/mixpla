@@ -3,6 +3,7 @@
     <!-- top-left buffer indicator -->
     <div class="status-indicator-wrapper-top-left">
       <div :class="['buffer-indicator', indicatorClass]"></div>
+      <span v-if="formattedBitrate" class="bandwidth-label">{{ formattedBitrate }}</span>
     </div>
 
     <!-- theme / animation toggles (only while paused) -->
@@ -65,6 +66,7 @@ const {
   radioName,
   isAsleep,
   bufferStatus,
+  currentBitrate,
   dynamicBorderStyle: storeDynamicBorderStyle,
   isBroadcasting,
   isWaitingForCurator,
@@ -143,6 +145,18 @@ const formatStationName = (name) => {
 const indicatorClass = computed(() =>
   isAsleep.value ? 'waiting' : bufferStatus.value
 );
+
+const STANDARD_BITRATES = [32, 48, 64, 96, 128, 160, 192, 196, 224, 256, 320];
+
+const formattedBitrate = computed(() => {
+  const br = currentBitrate.value;
+  if (!br || br <= 0) return '';
+  let kbps = br > 1000 ? br / 1000 : br;
+  const closest = STANDARD_BITRATES.reduce((prev, curr) =>
+    Math.abs(curr - kbps) < Math.abs(prev - kbps) ? curr : prev
+  );
+  return `${closest} kbps`;
+});
 
 const dynamicBorderStyle = computed(() => storeDynamicBorderStyle.value);
 

@@ -48,7 +48,8 @@ export const useStationStore = defineStore('station', {
       type: 'static',
       speed: 1,
       enabled: false
-    }
+    },
+    currentBitrate: 0
   }),
 
   getters: {
