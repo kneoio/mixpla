@@ -146,16 +146,11 @@ const indicatorClass = computed(() =>
   isAsleep.value ? 'waiting' : bufferStatus.value
 );
 
-const STANDARD_BITRATES = [32, 48, 64, 96, 128, 160, 192, 196, 224, 256, 320];
-
 const formattedBitrate = computed(() => {
   const br = currentBitrate.value;
   if (!br || br <= 0) return '';
-  let kbps = br > 1000 ? br / 1000 : br;
-  const closest = STANDARD_BITRATES.reduce((prev, curr) =>
-    Math.abs(curr - kbps) < Math.abs(prev - kbps) ? curr : prev
-  );
-  return `${closest} kbps`;
+  const kbps = br > 1000 ? br / 1000 : br;
+  return `${Math.round(kbps)} kbps`;
 });
 
 const dynamicBorderStyle = computed(() => storeDynamicBorderStyle.value);

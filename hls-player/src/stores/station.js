@@ -433,6 +433,7 @@ export const useStationStore = defineStore('station', {
     },
 
     startListPolling() { 
+      this.stopListPolling();
       const listInterval = parseInt(import.meta.env.VITE_POLLING_INTERVAL_LIST_MS, 10) || 60000;
       this.listPollingInterval = setInterval(() => {
         this.fetchStations(true);
